@@ -105,7 +105,7 @@ concept tuple = !container<Type> && requires(Type tuple)
 {
     std::get<0>(tuple);
     std::get<1>(tuple);
-    std::tuple_size_v<std::remove_cvref_t<Type>>;
+    sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
 }
 &&!requires(Type tuple)
 {
@@ -131,6 +131,12 @@ template <typename Type>
 concept owning_pointer =
     detail::is_unique_ptr<std::remove_cvref_t<Type>>::value ||
     detail::is_shared_ptr<std::remove_cvref_t<Type>>::value;
+
+template <typename Type>
+concept unspecialized =
+    !container<Type> && !owning_pointer<Type> && !tuple<Type> &&
+    !variant<Type> && !optional<Type> &&
+    !std::is_array_v<std::remove_cvref_t<Type>>;
 } // namespace concepts
 
 template <typename Item>
@@ -505,7 +511,7 @@ protected:
         }
     }
 
-    constexpr errc serialize_one(auto && item)
+    constexpr errc serialize_one(concepts::unspecialized auto && item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
         static_assert(!std::is_pointer_v<type>);
@@ -808,7 +814,7 @@ private:
         return {};
     }
 
-    constexpr errc serialize_one(auto && item)
+    constexpr errc serialize_one(concepts::unspecialized auto && item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
         static_assert(!std::is_pointer_v<type>);

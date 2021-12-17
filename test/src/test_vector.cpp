@@ -21,7 +21,7 @@ TEST(vector, integer)
 TEST(vector, const_integer)
 {
     auto [data, in, out] = zpp::bits::data_in_out();
-    const std::vector<const int> o{1,2,3,4};
+    const std::vector<int> o{1,2,3,4};
     out(o).or_throw();
 
     EXPECT_EQ(hexlify(data),
@@ -64,7 +64,7 @@ TEST(vector, const_string)
 {
     using namespace std::string_literals;
     auto [data, in, out] = zpp::bits::data_in_out();
-    const std::vector<const std::string> o{"1"s, "2"s, "3"s, "4"s};
+    const std::vector<std::string> o{"1"s, "2"s, "3"s, "4"s};
     out(o).or_throw();
 
     EXPECT_EQ(hexlify(data),
