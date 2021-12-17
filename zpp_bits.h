@@ -1,6 +1,7 @@
 #ifndef ZPP_BITS_H
 #define ZPP_BITS_H
 
+#include <cstring>
 #include <array>
 #include <bit>
 #include <climits>
