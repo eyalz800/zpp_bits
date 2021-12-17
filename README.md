@@ -3,7 +3,7 @@ zpp::bits
 
 [![Build Status](https://dev.azure.com/eyalz800/zpp_bits/_apis/build/status/eyalz800.zpp_bits?branchName=main)](https://dev.azure.com/eyalz800/zpp_bits/_build/latest?definitionId=9&branchName=main)
 
-A modern C++20 serialization library, with just one header file.
+A modern C++20 binary serialization library, with just one header file.
 
 This library is a successor to [zpp::serializer](https://github.com/eyalz800/serializer).
 The library tries to be simpler for use, but has more or less similar API to its predecessor.
@@ -28,13 +28,13 @@ Provide a single, simple header file, that would enable one to:
 
 Contents
 --------
-* For most types, enabling serialization is just one line here is an example of a `person` class with name
+* For most types, enabling serialization is *just one line*. Here is an example of a `person` class with name
 and age:
 ```cpp
 struct person
 {
     // Add this line to your class with the number of members:
-    using serialize = zpp::bits::members<2 /* two members */>;
+    using serialize = zpp::bits::members<2>; // Two members
 
     std::string name;
     int age{};
@@ -174,7 +174,7 @@ int main()
 }
 ```
 
-* Constructing input and output archives together separately from data:
+* Constructing input and output archives together and separately from data:
 ```cpp
 // Create both a vector of bytes, input and output archives.
 auto [data, in, out] = zpp::bits::data_in_out();
@@ -206,6 +206,8 @@ std::string data;
 zpp::bits::in in(data);
 zpp::bits::out out(data);
 ```
+You can also use fixed size data objects such as `std::array` and view types such as `std::span`
+similar to the above. You just need to make sure there is enough size since they are non resizable.
 
 * When using a vector, it automatically grows to the right size, however, you
 can also output and input from a span, in which case your memory size is
