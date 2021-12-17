@@ -83,3 +83,39 @@ TEST(vector, const_string)
 
     EXPECT_EQ(v, (std::vector{"1"s,"2"s,"3"s,"4"s}));
 }
+
+TEST(vector, sized_1b_integer)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(zpp::bits::sized<std::uint8_t>(std::vector{1,2,3,4})).or_throw();
+
+    EXPECT_EQ(hexlify(data),
+              "04"
+              "01000000"
+              "02000000"
+              "03000000"
+              "04000000");
+
+    std::vector<int> v;
+    in(zpp::bits::sized<std::uint8_t>(v)).or_throw();
+
+    EXPECT_EQ(v, (std::vector{1,2,3,4}));
+}
+
+TEST(vector, unsized_integer)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(zpp::bits::unsized(std::vector{1,2,3,4})).or_throw();
+
+    EXPECT_EQ(hexlify(data),
+              "01000000"
+              "02000000"
+              "03000000"
+              "04000000");
+
+    std::vector<int> v(4);
+    in(zpp::bits::unsized(v)).or_throw();
+
+    EXPECT_EQ(v, (std::vector{1,2,3,4}));
+}
+

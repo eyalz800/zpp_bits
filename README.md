@@ -250,6 +250,13 @@ in(zpp::bits::sized<std::uint16_t>(v));
 Make sure that the size type is large enough for the serialized object, otherwise less items
 will be serialized, according to conversion rules of unsigned types.
 
+* You can also choose to not serialize the size at all, like so:
+```
+std::vector<int> v = {1,2,3,4};
+out(zpp::bits::unsized(v));
+in(zpp::bits::unsized(v));
+```
+
 * Serialization using argument dependent lookup is also possible, using both
 the automatic member serialization way or with fully defined serialization functions.
 
