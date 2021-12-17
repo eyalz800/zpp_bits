@@ -6,21 +6,31 @@ strategy:
     ubuntu-18.04:
       VM_IMAGE: 'ubuntu-18.04'
       OPERATING_SYSTEM: 'linux'
+      COMPILER: 'clang'
       CLANG_VERSION: '12'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
-    ubuntu-20.04:
+    ubuntu-20.04-clang:
       VM_IMAGE: 'ubuntu-20.04'
       OPERATING_SYSTEM: 'linux'
+      COMPILER: 'clang'
       CLANG_VERSION: '12'
+      ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+    ubuntu-20.04-gcc:
+      VM_IMAGE: 'ubuntu-20.04'
+      OPERATING_SYSTEM: 'linux'
+      COMPILER: 'gcc'
+      GCC_VERSION: '11'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
     macOS-10.15:
       VM_IMAGE: 'macOS-10.15'
       OPERATING_SYSTEM: 'mac-os'
+      COMPILER: 'clang'
       CLANG_VERSION: '12'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
     macOS-11:
       VM_IMAGE: 'macOS-11'
       OPERATING_SYSTEM: 'mac-os'
+      COMPILER: 'clang'
       CLANG_VERSION: '12'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
 
@@ -35,7 +45,15 @@ steps:
     sudo apt install -y libc++-12-dev libc++abi-$(CLANG_VERSION)-dev libunwind-$(CLANG_VERSION)-dev
     sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-12 1200
   displayName: 'install (linux)'
-  condition: eq(variables['OPERATING_SYSTEM'], 'linux')
+  condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
+
+- script: |
+    curl -fLo llvm.sh https://apt.llvm.org/llvm.sh
+    chmod +x ./llvm.sh
+    sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    sudo apt install gcc-$(GCC_VERSION) g++-$(GCC_VERSION)
+  displayName: 'install (linux)'
+  condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'gcc'))
 
 - script: |
     brew install llvm@$(CLANG_VERSION) make
@@ -45,16 +63,29 @@ steps:
 - script: |
     git clone https://github.com/eyalz800/zpp_throwing ../zpp_throwing
   displayName: 'dependencies'
+  condition: eq(variables['COMPILER'], 'clang')
 
 - script: |
     make -C test -f zpp.mk -j
   displayName: 'compile-debug (linux)'
-  condition: eq(variables['OPERATING_SYSTEM'], 'linux')
+  condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
 
 - script: |
     make -C test -f zpp.mk -j mode=release
   displayName: 'compile-release (linux)'
-  condition: eq(variables['OPERATING_SYSTEM'], 'linux')
+  condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
+
+- script: |
+    sed -i 's/-stdlib=libc++//g' ./test/zpp_project.mk
+    make -C test -f zpp.mk -j ZPP_CC=gcc-11 ZPP_CXX=g++-11
+  displayName: 'compile-debug (linux)'
+  condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'gcc'))
+
+- script: |
+    sed -i 's/-stdlib=libc++//g' ./test/zpp_project.mk
+    make -C test -f zpp.mk -j mode=release ZPP_CC=gcc-11 ZPP_CXX=g++-11
+  displayName: 'compile-release (linux)'
+  condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'gcc'))
 
 - script: |
     export PATH=/usr/local/opt/llvm/bin:$PATH
