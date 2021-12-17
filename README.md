@@ -200,6 +200,7 @@ auto [data, out] = zpp::bits::data_out();
 std::vector<std::byte> data;
 std::vector<char> data;
 std::vector<unsigned char> data;
+std::string data;
 
 // Automatically works with either `std::byte`, `char`, `unsigned char`.
 zpp::bits::in in(data);

@@ -14,8 +14,8 @@ inline std::string hexlify(auto && view)
 
     std::string hex(view.size() * 2, '\0');
     for (auto i = 0; auto byte : view) {
-        hex[i++] = to_hex((std::to_integer<std::uint8_t>(byte) >> 4) & 0xf);
-        hex[i++] = to_hex(std::to_integer<std::uint8_t>(byte) & 0xf);
+        hex[i++] = to_hex((static_cast<std::uint8_t>(byte) >> 4) & 0xf);
+        hex[i++] = to_hex(static_cast<std::uint8_t>(byte) & 0xf);
     }
 
     return hex;
