@@ -28,7 +28,37 @@ Provide a single, simple header file, that would enable one to:
 
 Contents
 --------
-* To enable save & load of any object, add the following lines to your class
+* For most types, enabling serialization is just one line here is an example of a `person` class with name
+and age:
+```cpp
+struct person
+{
+    // Add this line to your class with the number of members:
+    using serialize = zpp::bits::members<2 /* two members */>;
+
+    std::string name;
+    int age{};
+};
+```
+Most of the time types we serialize can work with structured binding, and this library takes advantage
+of that, but you need to provide the number of members in your class for this to work using the method above.
+
+* If your data members or default constructor are private, you need to become friend with `zpp::bits::access`
+like so:
+```cpp
+struct private_person
+{
+    // Add this line to your class.
+    friend zpp::bits::access;
+    using serialize = zpp::bits::members<2>;
+
+private:
+    std::string name;
+    int age{};
+};
+```
+
+* To enable save & load of any object, even ones without structured binding, add the following lines to your class
 ```cpp
     constexpr static auto serialize(auto & archive, auto & self)
     {
@@ -37,7 +67,7 @@ Contents
 ```
 Note that `object_1, object_2, ...` are the non-static data members of your class.
 
-* Here is an example of a person class - a person has a name and an age:
+* Here is the example of a person class again with explicit serialization function:
 ```cpp
 struct person
 {
@@ -220,7 +250,24 @@ in(zpp::bits::sized<std::uint16_t>(v));
 Make sure that the size type is large enough for the serialized object, otherwise less items
 will be serialized, according to conversion rules of unsigned types.
 
-* Serialization using argument dependent lookup is also possible:
+* Serialization using argument dependent lookup is also possible, using both
+the automatic member serialization way or with fully defined serialization functions.
+
+With automatic member serialization:
+```cpp
+namespace my_namespace
+{
+struct adl
+{
+    int x;
+    int y;
+};
+
+constexpr auto serialize(const adl & adl) -> zpp::bits::members<2>;
+} // namespace my_namespace
+```
+
+With fully defined serialization functions:
 ```cpp
 namespace my_namespace
 {
