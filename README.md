@@ -19,7 +19,7 @@ Provide a single, simple header file, that would enable one to:
 * It is simpler
 * Performance improvements
 * Almost everything is `constexpr`
-* More flexible with serialization of the size of variable length types, opt out from serializing size.
+* More flexible with serialization of the size of variable length types, opt-out from serializing size.
 * Opt-in for [zpp::throwing](https://github.com/eyalz800/zpp_throwing) if header is found.
 * More friendly towards freestanding (no exception runtime support).
 * Breaks compatibility with anything lower than C++20 (which is why the original library is left intact).
@@ -113,7 +113,7 @@ in(p1, p2);
 ```
 
 This example almost works, we are being warned that we are discarding the return value.
-we need to check for errors, the library offers multiple ways to do so - a return value
+We need to check for errors, the library offers multiple ways to do so - a return value
 based, exception based, or [zpp::throwing](https://github.com/eyalz800/zpp_throwing) based.
 
 The return value based way for being most explicit, or if you just prefer return values:
@@ -223,6 +223,25 @@ zpp::bits::out out(data);
 You can also use fixed size data objects such as `std::array` and view types such as `std::span`
 similar to the above. You just need to make sure there is enough size since they are non resizable.
 
+* As was said above, the library is almost completely constexpr, here is an example
+of using array as data object but also using it in compile time to serialize and deserialize
+a tuple of integers:
+```cpp
+constexpr auto tuple_integers()
+{
+    std::array<std::byte, 0x1000> data{};
+    auto [in, out] = zpp::bits::in_out(data);
+    out(std::tuple{1,2,3,4,5}).or_throw();
+
+    std::tuple t{0,0,0,0,0};
+    in(t).or_throw();
+    return t;
+}
+
+// Compile time check.
+static_assert(tuple_integers() == std::tuple{1,2,3,4,5});
+```
+
 * When using a vector, it automatically grows to the right size, however, you
 can also output and input from a span, in which case your memory size is
 limited by the memory span:
@@ -248,7 +267,7 @@ out.reset(position); // reset to position.
 ```
 
 * Serializing STL containers and strings, first stores a 4 byte size, then the elements:
-```
+```cpp
 std::vector v = {1,2,3,4};
 out(v);
 in(v);
@@ -258,7 +277,7 @@ almost never reach a case of a container being more than ~4 billion items, and i
 pay the price of 8 bytes size by default.
 
 * For specific size types that are not 4 bytes, use `zpp::bits::sized` like so:
-```
+```cpp
 std::vector<int> v = {1,2,3,4};
 out(zpp::bits::sized<std::uint16_t>(v));
 in(zpp::bits::sized<std::uint16_t>(v));
@@ -268,7 +287,7 @@ Make sure that the size type is large enough for the serialized object, otherwis
 will be serialized, according to conversion rules of unsigned types.
 
 * You can also choose to not serialize the size at all, like so:
-```
+```cpp
 std::vector<int> v = {1,2,3,4};
 out(zpp::bits::unsized(v));
 in(zpp::bits::unsized(v));
@@ -351,7 +370,10 @@ Limitations
 -----------
 * Currently there is no explicit tool to handle backwards compatibility of structures, the only
 overhead that is generated is also part of the data structures anyway, which is size of variable length types,
-which is the active member of a variant, and whether an optional holds a value.
+which is the active member of a variant, and whether an optional holds a value, which does not leave much metadata
+for backwards compatibility. However, a neat way to achieve some versioning is by using `std::variant`, and versioning
+your types this way `std::variant<version1::type, version2::type, version3::type, ...>` and then use `std::visit()`
+to get called with the right version.
 * Serialization of non-owning pointers & raw pointers is not supported, for simplicity and also for security reasons.
 * Serialization of null pointers is not supported to avoid the default overhead of stating whether a pointer is null, to
 work around this use optional which is more explicit.
