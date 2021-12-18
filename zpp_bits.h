@@ -765,8 +765,11 @@ public:
     constexpr auto operator()(auto &&... items)
     {
         if constexpr (is_resizable) {
+            auto end = m_data.size();
             auto result = serialize_many(items...);
-            m_data.resize(m_position);
+            if (m_position > end) {
+                m_data.resize(m_position);
+            }
             return result;
         } else {
             return serialize_many(items...);
