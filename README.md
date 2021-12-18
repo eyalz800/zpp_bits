@@ -43,17 +43,19 @@ struct person
 Most of the time types we serialize can work with structured binding, and this library takes advantage
 of that, but you need to provide the number of members in your class for this to work using the method above.
 
-* In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and unevaluated lambda. To opt-in,
-you may may define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1` and avoid the need to even specify the number of members, and not require
-any modification to your class. The portability of this is not clear so it is turned off by default (works on clang-13)
+* In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and `unevaluated lambda expression`. It means
+that even the number of members can be detected automatically in most cases. To opt-in,
+define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`.
 ```cpp
-// Members are detected automatically.
+// Members are detected automatically, no additional change needed.
 struct person
 {
     std::string name;
     int age{};
 };
 ```
+This works with `clang 13`, however the portability of this is not clear, since in `gcc` it does not work (it is a hard error) and it explicitly states
+in the standard that there is intent not to allow SFINAE in similar cases, so it is turned off by default.
 
 * If your data members or default constructor are private, you need to become friend with `zpp::bits::access`
 like so:
@@ -255,7 +257,7 @@ The reason why the default size type is of 4 bytes (i.e `std::uint32_t`) is that
 almost never reach a case of a container being more than ~4 billion items, and it may be unjust to
 pay the price of 8 bytes size by default.
 
-* For specific size types that are not 4 bytes, use `zpp::serializer::size_is<SizeType>()`:
+* For specific size types that are not 4 bytes, use `zpp::bits::sized` like so:
 ```
 std::vector<int> v = {1,2,3,4};
 out(zpp::bits::sized<std::uint16_t>(v));
@@ -344,6 +346,15 @@ support serializing the size similar to other view types. If you need to seriali
 and want the size, as a workaround it's possible to cast to `std::span<std::byte>`.
 
 * This should cover most of the basic stuff, more documentation may come in the future.
+
+Limitations
+-----------
+* Currently there is no explicit tool to handle backwards compatibility of structures, the only
+overhead that is generated is also part of the data structures anyway, which is size of variable length types,
+which is the active member of a variant, and whether an optional holds a value.
+* Serialization of non-owning pointers & raw pointers is not supported, for simplicity and also for security reasons.
+* Serialization of null pointers is not supported to avoid the default overhead of stating whether a pointer is null, to
+work around this use optional which is more explicit.
 
 Final Words
 -----------
