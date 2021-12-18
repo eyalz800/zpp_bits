@@ -43,6 +43,18 @@ struct person
 Most of the time types we serialize can work with structured binding, and this library takes advantage
 of that, but you need to provide the number of members in your class for this to work using the method above.
 
+* In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and unevaluated lambda. To opt-in,
+you may may define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1` and avoid the need to even specify the number of members, and not require
+any modification to your class. The portability of this is not clear so it is turned off by default (works on clang-13)
+```cpp
+// Members are detected automatically.
+struct person
+{
+    std::string name;
+    int age{};
+};
+```
+
 * If your data members or default constructor are private, you need to become friend with `zpp::bits::access`
 like so:
 ```cpp
@@ -299,7 +311,7 @@ constexpr auto serialize(auto & archive, const adl & adl)
 } // namespace my_namespace
 ```
 
-* If you know your type is serializaeble just as raw bytes, you can opt in and optimize
+* If you know your type is serializable just as raw bytes, you can opt in and optimize
 its serialization to a mere `memcpy`:
 ```cpp
 struct point
@@ -316,6 +328,8 @@ struct point
     }
 };
 ```
+It is however done automatically if your class is using member based serialization with `zpp::bits::members`,
+rather than an explicit serialization function.
 
 It's also possible to do this directly from a vector or span of trivially copyable types,
 this time we use `bytes` instead of `as_bytes` because we convert the contents of the vector

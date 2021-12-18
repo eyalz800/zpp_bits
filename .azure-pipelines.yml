@@ -7,13 +7,13 @@ strategy:
       VM_IMAGE: 'ubuntu-18.04'
       OPERATING_SYSTEM: 'linux'
       COMPILER: 'clang'
-      CLANG_VERSION: '12'
+      CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
     ubuntu-20.04-clang:
       VM_IMAGE: 'ubuntu-20.04'
       OPERATING_SYSTEM: 'linux'
       COMPILER: 'clang'
-      CLANG_VERSION: '12'
+      CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
     ubuntu-20.04-gcc:
       VM_IMAGE: 'ubuntu-20.04'
@@ -25,13 +25,13 @@ strategy:
       VM_IMAGE: 'macOS-10.15'
       OPERATING_SYSTEM: 'mac-os'
       COMPILER: 'clang'
-      CLANG_VERSION: '12'
+      CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
     macOS-11:
       VM_IMAGE: 'macOS-11'
       OPERATING_SYSTEM: 'mac-os'
       COMPILER: 'clang'
-      CLANG_VERSION: '12'
+      CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
 
 pool:
@@ -42,8 +42,8 @@ steps:
     curl -fLo llvm.sh https://apt.llvm.org/llvm.sh
     chmod +x ./llvm.sh
     sudo ./llvm.sh $(CLANG_VERSION)
-    sudo apt install -y libc++-12-dev libc++abi-$(CLANG_VERSION)-dev libunwind-$(CLANG_VERSION)-dev
-    sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-12 1200
+    sudo apt install -y libc++-$(CLANG_VERSION)-dev libc++abi-$(CLANG_VERSION)-dev libunwind-$(CLANG_VERSION)-dev
+    sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-$(CLANG_VERSION) $(CLANG_VERSION)00
   displayName: 'install (linux)'
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
 
@@ -66,12 +66,12 @@ steps:
   condition: eq(variables['COMPILER'], 'clang')
 
 - script: |
-    make -C test -f zpp.mk -j
+    make -C test -f zpp.mk -j ZPP_BITS_AUTODETECT_MEMBERS_MODE=1
   displayName: 'compile-debug (linux)'
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
 
 - script: |
-    make -C test -f zpp.mk -j mode=release
+    make -C test -f zpp.mk -j mode=release ZPP_BITS_AUTODETECT_MEMBERS_MODE=1
   displayName: 'compile-release (linux)'
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
 
