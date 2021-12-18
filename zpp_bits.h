@@ -293,7 +293,7 @@ struct [[nodiscard]] errc
     }
 
 #if __has_include("zpp_throwing.h")
-    constexpr zpp::throwing<void> operator co_await()
+    constexpr zpp::throwing<void> operator co_await() const
     {
         if (failure(code)) [[unlikely]] {
             return code;
@@ -302,13 +302,13 @@ struct [[nodiscard]] errc
     }
 #endif
 
-    constexpr operator std::errc()
+    constexpr operator std::errc() const
     {
         return code;
     }
 
 #ifdef __cpp_exceptions
-    constexpr void or_throw()
+    constexpr void or_throw() const
     {
         if (failure(code)) [[unlikely]] {
             throw std::system_error(std::make_error_code(code));
