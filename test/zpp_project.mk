@@ -12,9 +12,11 @@ ZPP_COMPILE_COMMANDS_JSON := compile_commands.json
 endif
 
 ifeq ($(ZPP_PROJECT_FLAGS), true)
+ZPP_BITS_AUTODETECT_MEMBERS_MODE ?= 0
 ZPP_FLAGS := \
 	$(patsubst %, -I%, $(shell find . -type d -name "inc" -or -name "include")) \
-	-pedantic -Wall -Wextra -Werror -fPIE -Isrc/gtest -pthread -I../ -I../../zpp_throwing
+	-pedantic -Wall -Wextra -Werror -fPIE -Isrc/gtest -pthread -I../ -I../../zpp_throwing \
+	-DZPP_BITS_AUTODETECT_MEMBERS_MODE=$(ZPP_BITS_AUTODETECT_MEMBERS_MODE)
 ZPP_FLAGS_DEBUG := -g -fsanitize=address -O2
 ZPP_FLAGS_RELEASE := \
 	-O2 -ffunction-sections \
