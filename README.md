@@ -55,7 +55,7 @@ struct person
 };
 ```
 This works with `clang 13`, however the portability of this is not clear, since in `gcc` it does not work (it is a hard error) and it explicitly states
-in the standard that there is intent not to allow SFINAE in similar cases, so it is turned off by default.
+in the standard that there is intent not to allow *SFINAE* in similar cases, so it is turned off by default.
 
 * If your data members or default constructor are private, you need to become friend with `zpp::bits::access`
 like so:
