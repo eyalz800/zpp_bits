@@ -101,7 +101,6 @@ concept byte_view = byte_type<typename std::remove_cvref_t<Type>::value_type> &&
     value.size();
 };
 
-
 template <typename Type>
 concept container = requires(Type container)
 {
@@ -163,14 +162,19 @@ concept byte_serializable = requires
         int,
         (std::bit_cast<std::remove_cvref_t<Type>>(
              std::array<std::byte, sizeof(Type)>()),
-         0)>::value
-    == 0;
+         0)>::value == 0;
 }
 &&(!requires {
-    requires std::same_as<
+    requires std::same_as <
         explicit_members<std::remove_cvref_t<Type>::serialize::value>,
-        typename std::remove_cvref_t<Type>::serialize>;
-});
+    typename std::remove_cvref_t<Type>::serialize > ;
+}) &&
+    (
+        !requires { typename std::remove_cvref_t<Type>::serialize; } ||
+        requires {
+            requires std::remove_cvref_t<Type>::serialize::value >
+            1;
+        });
 } // namespace concepts
 
 template <typename Item>
