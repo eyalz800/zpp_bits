@@ -364,6 +364,33 @@ However in this case the size is not serialized, this may be extended in the fut
 support serializing the size similar to other view types. If you need to serialize as bytes
 and want the size, as a workaround it's possible to cast to `std::span<std::byte>`.
 
+* As part of the library implementation it was required to implement some reflection types, for
+counting members and visiting members, and the library exposes these to the user:
+```cpp
+struct point
+{
+    int x;
+    int y;
+};
+
+static_assert(zpp::bits::number_of_members<point>() == 2);
+
+auto sum = zpp::bits::visit_members(
+    point{1, 2}, [](auto x, auto y) { return x + y; });
+
+auto generic_sum = zpp::bits::visit_members(
+    point{1, 2}, [](auto... members) { return (0 + ... + members); });
+
+std::cout << sum << ", " << generic_sum << '\n';
+
+constexpr auto is_two_integers = zpp::bits::visit_members_types<point>(
+    []<typename... Types>() { return std::true_type{}; })();
+
+if constexpr (is_two_integers) {
+    std::cout << "Two integers!\n";
+}
+```
+
 * This should cover most of the basic stuff, more documentation may come in the future.
 
 Limitations
