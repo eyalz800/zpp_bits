@@ -208,6 +208,39 @@ auto [data, in] = zpp::bits::data_in();
 auto [data, out] = zpp::bits::data_out();
 ```
 
+
+* If your object and its subobjects recursively can just be byte copied, i.e don't have references or pointers or non
+trivially copyable subobjects (more accurately, your object fits into the bit cast requirements), then you don't need to specify the number of members and
+serializing your object becomes a `memcpy` operation. Unless of course you define an explicit serialization function in which
+case the members are serialized one by one separately.
+```cpp
+struct point
+{
+    int x;
+    int y;
+};
+
+auto [data, out] = zpp::bits::data_out();
+out(point{1337, 1338});
+```
+The above is serializable/deserializable without any modification by using a `memcpy` operation.
+This has the advantage of better performance most of the times, but the disadvantage is that the format becomes less portable
+due to potential padding bytes.
+
+To avoid this behavior and serialize members one by one you can either define the explicit serialization function or
+use `zpp::bits::strict_members` and provide the number of members:
+```cpp
+struct point
+{
+    using serialize = zpp::bits::strict_members<2>;
+
+    int x;
+    int y;
+};
+```
+If you are using automatic member detection as per `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`, you may leave the
+angle brackets empty as in `zpp::bits::strict_members<>`.
+
 * Archives can be constructed from either one of the byte types:
 ```cpp
 // Either one of these work with the below.

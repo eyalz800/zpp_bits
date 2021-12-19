@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstring>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -48,6 +49,18 @@ constexpr ToType bit_cast(FromType const & from) noexcept
 }
 } // namespace std
 #endif
+
+template <std::size_t Count>
+struct members
+{
+    constexpr static std::size_t value = Count;
+};
+
+template <std::size_t Count = std::numeric_limits<std::size_t>::max()>
+struct strict_members
+{
+    constexpr static std::size_t value = Count;
+};
 
 namespace concepts
 {
@@ -141,6 +154,23 @@ concept unspecialized =
     !container<Type> && !owning_pointer<Type> && !tuple<Type> &&
     !variant<Type> && !optional<Type> &&
     !std::is_array_v<std::remove_cvref_t<Type>>;
+
+template <typename Type>
+concept byte_serializable = requires
+{
+    requires std::is_trivially_copyable_v<std::remove_cvref_t<Type>>;
+    requires std::integral_constant<
+        int,
+        (std::bit_cast<std::remove_cvref_t<Type>>(
+             std::array<std::byte, sizeof(Type)>()),
+         0)>::value
+    == 0;
+}
+&&(!requires {
+    requires std::same_as<
+        strict_members<std::remove_cvref_t<Type>::serialize::value>,
+        typename std::remove_cvref_t<Type>::serialize>;
+});
 } // namespace concepts
 
 template <typename Item>
@@ -333,12 +363,6 @@ constexpr auto failure(errc code)
     return std::errc{} != code;
 }
 
-template <std::size_t Count>
-struct members
-{
-    constexpr static std::size_t value = Count;
-};
-
 struct access
 {
     template <typename Item>
@@ -404,15 +428,10 @@ struct access
     {
         return visit_members<Size>(
             item, [&](auto &&... items) constexpr {
-                if constexpr (std::is_trivially_copyable_v<
-                                  std::remove_cvref_t<decltype(item)>>) {
+                if constexpr (concepts::byte_serializable<decltype(item)>) {
                     if constexpr (sizeof...(items) > 1 &&
-                                  (... &&
-                                   (std::is_fundamental_v<
-                                        std::remove_cvref_t<
-                                            decltype(items)>> ||
-                                    std::is_enum_v<std::remove_cvref_t<
-                                        decltype(items)>>))) {
+                                  (... && concepts::byte_serializable<
+                                              decltype(items)>)) {
                         return serializer.serialize_one(as_bytes(item));
                     } else {
                         return serializer.serialize_many(items...);
@@ -423,23 +442,34 @@ struct access
             });
     }
 
-    constexpr static auto serialize_members(
-        auto &serializer, auto &item) requires std::is_same_v <
-        members<std::remove_cvref_t<decltype(item)>::serialize::value>,
-    typename std::remove_cvref_t<decltype(item)>::serialize >
-        &&(std::remove_cvref_t<decltype(item)>::serialize::value <=
-           max_members_serialize)
+    constexpr static auto
+        serialize_members(auto & serializer, auto & item) requires(
+            std::is_same_v<
+                members<
+                    std::remove_cvref_t<decltype(item)>::serialize::value>,
+                typename std::remove_cvref_t<decltype(item)>::serialize> ||
+            std::is_same_v<strict_members<std::remove_cvref_t<
+                               decltype(item)>::serialize::value>,
+                           typename std::remove_cvref_t<
+                               decltype(item)>::serialize>) &&
+        (std::remove_cvref_t<decltype(item)>::serialize::value <=
+         max_members_serialize)
     {
         return serialize_members<
             std::remove_cvref_t<decltype(item)>::serialize::value>(
             serializer, item);
     }
 
-    constexpr static auto serialize_members(auto & serializer,
-                                            auto & item) requires
-        std::is_same_v<
-            members<std::remove_cvref_t<decltype(serialize(item))>::value>,
-            std::remove_cvref_t<decltype(serialize(item))>> &&
+    constexpr static auto
+        serialize_members(auto & serializer, auto & item) requires(
+            std::is_same_v<
+                members<
+                    std::remove_cvref_t<decltype(serialize(item))>::value>,
+                std::remove_cvref_t<decltype(serialize(item))>> ||
+            std::is_same_v<
+                strict_members<
+                    std::remove_cvref_t<decltype(serialize(item))>::value>,
+                std::remove_cvref_t<decltype(serialize(item))>>) &&
         (std::remove_cvref_t<decltype(serialize(item))>::value <=
          max_members_serialize)
     {
@@ -450,10 +480,26 @@ struct access
 
     constexpr static auto
     serialize_members(auto & serializer, auto & item) requires(
-            (number_of_members<std::remove_cvref_t<decltype(item)>>() >= 0) &&
-            !requires { typename std::remove_cvref_t<decltype(item)>::serialize; } &&
-            !requires { std::remove_cvref_t<decltype(item)>::serialize(serializer, item); } &&
-            !requires { serialize(item); } && !requires { serialize(serializer, item); })
+        (number_of_members<std::remove_cvref_t<decltype(item)>>() >= 0) &&
+        (
+            !requires {
+                typename std::remove_cvref_t<decltype(item)>::serialize;
+            } ||
+            requires {
+                requires std::same_as <
+                    strict_members<std::remove_cvref_t<
+                        decltype(item)>::serialize::value>,
+                typename std::remove_cvref_t<decltype(item)>::serialize > ;
+                requires std::remove_cvref_t<
+                    decltype(item)>::serialize::value ==
+                    std::numeric_limits<std::size_t>::max();
+            }) &&
+        !requires {
+            std::remove_cvref_t<decltype(item)>::serialize(serializer,
+                                                           item);
+        } &&
+        !requires { serialize(item); } &&
+        !requires { serialize(serializer, item); })
 
     {
         return serialize_members<
@@ -474,6 +520,9 @@ class basic_out
 public:
     template <typename>
     friend struct option;
+
+    template <typename... Types>
+    using template_type = basic_out<Types...>;
 
     friend access;
 
@@ -564,7 +613,11 @@ protected:
         using type = std::remove_cvref_t<decltype(item)>;
         static_assert(!std::is_pointer_v<type>);
 
-        if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+        if constexpr (requires { type::serialize(*this, item); }) {
+            return type::serialize(*this, item);
+        } else if constexpr (requires { serialize(*this, item); }) {
+            return serialize(*this, item);
+        } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
             auto size = m_data.size();
             if (m_position + sizeof(item) > size) [[unlikely]] {
                 if constexpr (is_resizable) {
@@ -622,10 +675,8 @@ protected:
             }
             m_position += item_size_in_bytes;
             return {};
-        } else if constexpr (requires { type::serialize(*this, item); }) {
-            return type::serialize(*this, item);
-        } else if constexpr (requires { serialize(*this, item); }) {
-            return serialize(*this, item);
+        } else if constexpr (concepts::byte_serializable<type>) {
+            return serialize_one(as_bytes(item));
         } else {
             return access::serialize_members(*this, item);
         }
@@ -636,8 +687,7 @@ protected:
     {
         using value_type = std::remove_cvref_t<decltype(array[0])>;
 
-        if constexpr (std::is_fundamental_v<value_type> ||
-                       std::is_enum_v<value_type>) {
+        if constexpr (concepts::byte_serializable<value_type>) {
             return serialize_one(bytes(array));
         } else {
             for (auto & item : array) {
@@ -673,12 +723,11 @@ protected:
             }
         }
 
-        if constexpr ((std::is_fundamental_v<value_type> ||
-                       std::is_enum_v<value_type>)&&std::
-                          is_base_of_v<std::random_access_iterator_tag,
-                                       typename std::iterator_traits<
-                                           typename type::iterator>::
-                                           iterator_category> &&
+        if constexpr (concepts::byte_serializable<value_type> &&
+                      std::is_base_of_v<std::random_access_iterator_tag,
+                                        typename std::iterator_traits<
+                                            typename type::iterator>::
+                                            iterator_category> &&
                       requires { container.data(); }) {
             return serialize_one(bytes(container));
         } else {
@@ -760,6 +809,9 @@ template <concepts::byte_view ByteView>
 class out : public basic_out<ByteView>
 {
 public:
+    template <typename... Types>
+    using template_type = out<Types...>;
+
     using basic_out<ByteView>::basic_out;
 
     constexpr auto operator()(auto &&... items)
@@ -793,6 +845,9 @@ template <concepts::byte_view ByteView>
 class in
 {
 public:
+    template <typename... Types>
+    using template_type = in<Types...>;
+
     template <typename>
     friend struct option;
 
@@ -868,7 +923,11 @@ private:
         using type = std::remove_cvref_t<decltype(item)>;
         static_assert(!std::is_pointer_v<type>);
 
-        if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+        if constexpr (requires { type::serialize(*this, item); }) {
+            return type::serialize(*this, item);
+        } else if constexpr (requires { serialize(*this, item); }) {
+            return serialize(*this, item);
+        } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
             auto size = m_data.size();
             if (m_position + sizeof(item) > size) [[unlikely]] {
                 return std::errc::result_out_of_range;
@@ -921,10 +980,8 @@ private:
             }
             m_position += item_size_in_bytes;
             return {};
-        } else if constexpr (requires { type::serialize(*this, item); }) {
-            return type::serialize(*this, item);
-        } else if constexpr (requires { serialize(*this, item); }) {
-            return serialize(*this, item);
+        } else if constexpr (concepts::byte_serializable<type>) {
+            return serialize_one(as_bytes(item));
         } else {
             return access::serialize_members(*this, item);
         }
@@ -935,8 +992,7 @@ private:
     {
         using value_type = std::remove_cvref_t<decltype(array[0])>;
 
-        if constexpr (std::is_fundamental_v<value_type> ||
-                       std::is_enum_v<value_type>) {
+        if constexpr (concepts::byte_serializable<value_type>) {
             return serialize_one(bytes(array));
         } else {
             for (auto & item : array) {
@@ -981,12 +1037,11 @@ private:
             }
         }
 
-        if constexpr ((std::is_fundamental_v<value_type> ||
-                       std::is_enum_v<value_type>)&&std::
-                          is_base_of_v<std::random_access_iterator_tag,
-                                       typename std::iterator_traits<
-                                           typename type::iterator>::
-                                           iterator_category> &&
+        if constexpr (concepts::byte_serializable<value_type> &&
+                      std::is_base_of_v<std::random_access_iterator_tag,
+                                        typename std::iterator_traits<
+                                            typename type::iterator>::
+                                            iterator_category> &&
                       requires { container.data(); }) {
             return serialize_one(bytes(container));
         } else {
