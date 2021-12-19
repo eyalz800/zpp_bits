@@ -56,12 +56,6 @@ struct members
     constexpr static std::size_t value = Count;
 };
 
-template <std::size_t Count = std::numeric_limits<std::size_t>::max()>
-struct explicit_members
-{
-    constexpr static std::size_t value = Count;
-};
-
 namespace concepts
 {
 namespace detail
@@ -400,31 +394,10 @@ struct access
                                          std::size_t>::max();
                              }) {
             return type::serialize::value;
-        } else if constexpr (requires {
-                                 requires std::same_as<
-                                     typename type::serialize,
-                                     explicit_members<
-                                         type::serialize::value>>;
-                                 requires type::serialize::value !=
-                                     std::numeric_limits<
-                                         std::size_t>::max();
-                             }) {
-            return type::serialize::value;
         } else if constexpr (requires(Type && item) {
                                  requires std::same_as<
                                      decltype(serialize(item)),
                                      members<decltype(serialize(
-                                         item))::value>>;
-                                 requires decltype(serialize(
-                                     item))::value !=
-                                     std::numeric_limits<
-                                         std::size_t>::max();
-                             }) {
-            return decltype(serialize(std::declval<type>()))::value;
-        } else if constexpr (requires(Type && item) {
-                                 requires std::same_as<
-                                     decltype(serialize(item)),
-                                     explicit_members<decltype(serialize(
                                          item))::value>>;
                                  requires decltype(serialize(
                                      item))::value !=
