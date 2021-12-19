@@ -521,6 +521,12 @@ enum class kind
     out
 };
 
+template <typename Type>
+constexpr static auto number_of_members()
+{
+    return access::number_of_members<Type>();
+}
+
 constexpr decltype(auto) visit_members(auto && object, auto && visitor)
 {
     return access::visit_members(object, visitor);
