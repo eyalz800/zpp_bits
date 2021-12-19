@@ -17,18 +17,25 @@ static_assert(zpp::bits::number_of_members<point>() == 2);
 
 TEST(test_reflect, sanity)
 {
-    auto sum = zpp::bits::visit_members(
+    constexpr auto sum = zpp::bits::visit_members(
         point{1, 2}, [](auto x, auto y) { return x + y; });
 
-    EXPECT_EQ(sum, 3);
+    static_assert(sum == 3);
 
-    auto generic_sum = zpp::bits::visit_members(
+    constexpr auto generic_sum = zpp::bits::visit_members(
         point{1, 2}, [](auto... members) { return (0 + ... + members); });
 
-    EXPECT_EQ(generic_sum, 3);
+    static_assert(generic_sum == 3);
 
-    constexpr auto is_two_integers = zpp::bits::visit_members_types<point>(
-        []<typename... Types>() { return std::true_type{}; })();
+    constexpr auto is_two_integers =
+        zpp::bits::visit_members_types<point>([]<typename... Types>() {
+            if constexpr (std::same_as<std::tuple<Types...>,
+                                       std::tuple<int, int>>) {
+                return std::true_type{};
+            } else {
+                return std::false_type{};
+            }
+        })();
 
     static_assert(is_two_integers);
 }

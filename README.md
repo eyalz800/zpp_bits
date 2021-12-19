@@ -373,25 +373,37 @@ struct point
     int y;
 };
 
+#if !ZPP_BITS_AUTODETECT_MEMBERS_MODE
+auto serialize(point) -> zpp::bits::members<2>;
+#endif
+
 static_assert(zpp::bits::number_of_members<point>() == 2);
 
-auto sum = zpp::bits::visit_members(
+constexpr auto sum = zpp::bits::visit_members(
     point{1, 2}, [](auto x, auto y) { return x + y; });
 
-auto generic_sum = zpp::bits::visit_members(
+static_assert(sum == 3);
+
+constexpr auto generic_sum = zpp::bits::visit_members(
     point{1, 2}, [](auto... members) { return (0 + ... + members); });
 
-std::cout << sum << ", " << generic_sum << '\n';
+static_assert(generic_sum == 3);
 
-constexpr auto is_two_integers = zpp::bits::visit_members_types<point>(
-    []<typename... Types>() { return std::true_type{}; })();
+constexpr auto is_two_integers =
+    zpp::bits::visit_members_types<point>([]<typename... Types>() {
+        if constexpr (std::same_as<std::tuple<Types...>,
+                                   std::tuple<int, int>>) {
+            return std::true_type{};
+        } else {
+            return std::false_type{};
+        }
+    })();
 
-if constexpr (is_two_integers) {
-    std::cout << "Two integers!\n";
-}
+static_assert(is_two_integers);
 ```
-The example above relies on `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`, otherwise you will
-need to add the `zpp::bits::members<2>` inside or outside the class as noted above.
+The example above works with or without `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`, depending
+on the `#if`. As noted above, we must rely on specific compiler feature to detect the
+number of members which may not be portable.
 
 * This should cover most of the basic stuff, more documentation may come in the future.
 
