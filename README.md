@@ -227,7 +227,8 @@ The above is serializable/deserializable without any modification by using a `me
 This has the advantage of better performance most of the times, but the disadvantage is that the format becomes less portable
 due to potential padding bytes.
 
-To avoid this behavior and serialize members one by one you can either define the explicit serialization function or
+When using plain `zpp::bits::members` it does its best to detect if there is padding for your
+type or not and decides this automatically, but to be more explicit, you can either define the explicit serialization function or
 use `zpp::bits::explicit_members` and provide the number of members:
 ```cpp
 struct requires_padding
@@ -239,7 +240,7 @@ struct requires_padding
 };
 ```
 If you are using automatic member detection as per `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`, you may leave the
-angle brackets empty as in `zpp::bits::explicit_members<>`.
+angle brackets empty as in `zpp::bits::members<>` or `zpp::bits::explicit_members<>`.
 
 * Archives can be constructed from either one of the byte types:
 ```cpp
