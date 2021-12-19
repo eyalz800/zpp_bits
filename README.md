@@ -390,6 +390,8 @@ if constexpr (is_two_integers) {
     std::cout << "Two integers!\n";
 }
 ```
+The example above relies on `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`, otherwise you will
+need to add the `zpp::bits::members<2>` inside or outside the class as noted above.
 
 * This should cover most of the basic stuff, more documentation may come in the future.
 
