@@ -169,6 +169,12 @@ concept byte_serializable = requires
         explicit_members<std::remove_cvref_t<Type>::serialize::value>,
     typename std::remove_cvref_t<Type>::serialize > ;
 }) &&
+    (!requires(Type && type) {
+        requires std::same_as<
+            explicit_members<
+                std::remove_cvref_t<decltype(serialize(type))>::value>,
+            std::remove_cvref_t<decltype(serialize(type))>>;
+    }) &&
     (
         !requires { typename std::remove_cvref_t<Type>::serialize; } ||
         requires {

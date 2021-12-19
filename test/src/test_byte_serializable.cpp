@@ -162,6 +162,37 @@ TEST(byte_serializable, explicit_requires_padding)
     EXPECT_EQ(s.i32, 0x1337);
 }
 
+struct explicit_requires_padding_outside
+{
+    std::byte b{};
+    std::int32_t i32{};
+};
+
+auto serialize(const explicit_requires_padding_outside &) -> zpp::bits::explicit_members<2>;
+
+TEST(byte_serializable, explicit_requires_padding_outside)
+{
+    static_assert(!zpp::bits::concepts::byte_serializable<
+                  explicit_requires_padding_outside>);
+    static_assert(sizeof(requires_padding) ==
+                  sizeof(explicit_requires_padding_outside));
+    static_assert(sizeof(explicit_requires_padding_outside) > 5);
+
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(explicit_requires_padding{std::byte{0x25}, 0x1337}).or_throw();
+
+    EXPECT_EQ(data.size(), std::size_t{5});
+    EXPECT_EQ(hexlify(data),
+              "25"
+              "37130000");
+
+    explicit_requires_padding s;
+    in(s).or_throw();
+    EXPECT_EQ(in.position(), std::size_t{5});
+    EXPECT_EQ(s.b, std::byte{0x25});
+    EXPECT_EQ(s.i32, 0x1337);
+}
+
 #if ZPP_BITS_AUTODETECT_MEMBERS_MODE > 0
 struct explicit_requires_padding_auto
 {
