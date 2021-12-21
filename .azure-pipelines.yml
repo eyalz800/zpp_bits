@@ -9,30 +9,42 @@ strategy:
       COMPILER: 'clang'
       CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+      TEST_AUTODETECT: 1
     ubuntu-20.04-clang:
       VM_IMAGE: 'ubuntu-20.04'
       OPERATING_SYSTEM: 'linux'
       COMPILER: 'clang'
       CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+      TEST_AUTODETECT: 1
+    ubuntu-20.04-clang12:
+      VM_IMAGE: 'ubuntu-20.04'
+      OPERATING_SYSTEM: 'linux'
+      COMPILER: 'clang'
+      CLANG_VERSION: '12'
+      ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+      TEST_AUTODETECT: 0
     ubuntu-20.04-gcc:
       VM_IMAGE: 'ubuntu-20.04'
       OPERATING_SYSTEM: 'linux'
       COMPILER: 'gcc'
       GCC_VERSION: '11'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+      TEST_AUTODETECT: 0
     macOS-10.15:
       VM_IMAGE: 'macOS-10.15'
       OPERATING_SYSTEM: 'mac-os'
       COMPILER: 'clang'
       CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+      TEST_AUTODETECT: 1
     macOS-11:
       VM_IMAGE: 'macOS-11'
       OPERATING_SYSTEM: 'mac-os'
       COMPILER: 'clang'
       CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+      TEST_AUTODETECT: 1
 
 pool:
   vmImage: $(VM_IMAGE)
@@ -66,12 +78,12 @@ steps:
   condition: eq(variables['COMPILER'], 'clang')
 
 - script: |
-    make -C test -f zpp.mk -j ZPP_BITS_AUTODETECT_MEMBERS_MODE=1
+    make -C test -f zpp.mk -j ZPP_BITS_AUTODETECT_MEMBERS_MODE=$(TEST_AUTODETECT)
   displayName: 'compile-debug (linux)'
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
 
 - script: |
-    make -C test -f zpp.mk -j mode=release ZPP_BITS_AUTODETECT_MEMBERS_MODE=1
+    make -C test -f zpp.mk -j mode=release ZPP_BITS_AUTODETECT_MEMBERS_MODE=$(TEST_AUTODETECT)
   displayName: 'compile-release (linux)'
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
 
