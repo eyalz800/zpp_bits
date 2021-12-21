@@ -171,6 +171,12 @@ public:
     std::strong_ordering operator<=>(
         const inaccessible_requires_padding & other) const = default;
 
+    void dummy()
+    {
+        (void)b;
+        (void)i32;
+    }
+
 private:
     using serialize = zpp::bits::members<2>;
     std::byte b{};

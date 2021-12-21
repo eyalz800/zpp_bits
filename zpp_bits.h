@@ -610,6 +610,28 @@ struct access
     }
 
     template <typename Type>
+    struct byte_serializable_visitor
+    {
+        template <typename... Types>
+        constexpr auto operator()() {
+            using type = std::remove_cvref_t<Type>;
+
+            if constexpr (concepts::empty<type>) {
+                return std::false_type{};
+            } else if constexpr ((... || !byte_serializable<Types>())) {
+                return std::false_type{};
+            } else if constexpr ((0 + ... + sizeof(Types)) !=
+                                 sizeof(type)) {
+                return std::false_type{};
+            } else if constexpr ((... || concepts::empty<Types>)) {
+                return std::false_type{};
+            } else {
+                return std::true_type{};
+            }
+        }
+    };
+
+    template <typename Type>
     constexpr static auto byte_serializable()
     {
         constexpr auto members_count = number_of_members<Type>();
@@ -633,21 +655,8 @@ struct access
         } else if constexpr (!members_count) {
             return true;
         } else {
-            return visit_members_types<type>([]<typename... Types>() {
-                if constexpr (concepts::empty<type>) {
-                    return std::false_type{};
-                } else if constexpr ((... ||
-                                      !byte_serializable<Types>())) {
-                    return std::false_type{};
-                } else if constexpr ((0 + ... + sizeof(Types)) !=
-                                     sizeof(type)) {
-                    return std::false_type{};
-                } else if constexpr ((... || concepts::empty<Types>)) {
-                    return std::false_type{};
-                } else {
-                    return std::true_type{};
-                }
-            })();
+            return visit_members_types<type>(
+                byte_serializable_visitor<type>{})();
         }
     }
 };

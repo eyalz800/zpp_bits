@@ -27,6 +27,7 @@ TEST(test_reflect, sanity)
 
     static_assert(generic_sum == 3);
 
+#if !(defined __clang__ && __clang_major__ < 13)
     constexpr auto is_two_integers =
         zpp::bits::visit_members_types<point>([]<typename... Types>() {
             if constexpr (std::same_as<std::tuple<Types...>,
@@ -38,6 +39,7 @@ TEST(test_reflect, sanity)
         })();
 
     static_assert(is_two_integers);
+#endif
 }
 
 TEST(test_reflect, visit_point)
@@ -57,6 +59,7 @@ TEST(test_reflect, visit_point)
     EXPECT_EQ(result, (1337 + 1338));
 }
 
+#if !(defined __clang__ && __clang_major__ < 13)
 TEST(test_reflect, visit_point_types)
 {
     auto result = zpp::bits::visit_members_types<point>([]<typename... Types>() {
@@ -67,5 +70,6 @@ TEST(test_reflect, visit_point_types)
 
     EXPECT_EQ(result, 1337);
 }
+#endif
 
 } // namespace test_reflect
