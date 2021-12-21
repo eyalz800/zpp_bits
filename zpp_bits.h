@@ -8,8 +8,10 @@
 #include <array>
 #include <bit>
 #include <climits>
+#include <compare>
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <iterator>
 #include <limits>
@@ -56,9 +58,13 @@ struct members
     constexpr static std::size_t value = Count;
 };
 
-namespace concepts
+template <auto Id>
+struct serialization_id
 {
-namespace detail
+    constexpr static auto value = Id;
+};
+
+namespace traits
 {
 template <typename Type>
 struct is_unique_ptr : std::false_type
@@ -80,8 +86,133 @@ template <typename Type>
 struct is_shared_ptr<std::shared_ptr<Type>> : std::true_type
 {
 };
-} // detail
 
+template <typename Variant>
+struct variant_impl;
+
+template <typename... Types, template <typename...> typename Variant>
+struct variant_impl<Variant<Types...>>
+{
+    template <std::size_t Index,
+              std::size_t CurrentIndex,
+              typename FirstType,
+              typename... OtherTypes>
+    constexpr static auto get_id()
+    {
+        if constexpr (Index == CurrentIndex) {
+            if constexpr (requires {
+                              requires std::same_as<
+                                  serialization_id<
+                                      FirstType::serialize_id::value>,
+                              typename FirstType::serialize_id>;
+                          }) {
+                return FirstType::serialize_id::value;
+            } else if constexpr (
+                requires {
+                    requires std::same_as<
+                        serialization_id<decltype(serialize_id(
+                            std::declval<FirstType>()))::value>,
+                    decltype(serialize_id(std::declval<FirstType>()))>;
+                }) {
+                return decltype(serialize_id(
+                    std::declval<FirstType>()))::value;
+            } else {
+                return std::byte{Index};
+            }
+        } else {
+            return get_id<Index, CurrentIndex + 1, OtherTypes...>();
+        }
+    }
+
+    template <std::size_t Index>
+    constexpr static auto id()
+    {
+        return get_id<Index, 0, Types...>();
+    }
+
+    template <std::size_t CurrentIndex = 0>
+    constexpr static auto id(auto index)
+    {
+        if constexpr (CurrentIndex == (sizeof...(Types) - 1)) {
+            return id<CurrentIndex>();
+        } else {
+            if (index == CurrentIndex) {
+                return id<CurrentIndex>();
+            } else {
+                return id<CurrentIndex + 1>(index);
+            }
+        }
+    }
+
+    template <std::size_t CurrentIndex = 0>
+    constexpr static std::size_t index(auto && id)
+    {
+        if constexpr (CurrentIndex == sizeof...(Types)) {
+            return std::numeric_limits<std::size_t>::max();
+        } else {
+            if (variant_impl::id<CurrentIndex>() == id) {
+                return CurrentIndex;
+            } else {
+                return index<CurrentIndex + 1>(id);
+            }
+        }
+        return std::numeric_limits<std::size_t>::max();
+    }
+
+    template <std::size_t... LeftIndices, std::size_t... RightIndices>
+    constexpr static auto unique_ids(std::index_sequence<LeftIndices...>,
+                                     std::index_sequence<RightIndices...>)
+    {
+        auto unique_among_rest = []<auto LeftIndex, auto LeftId>()
+        {
+            return (... && ((LeftIndex == RightIndices) ||
+                            (LeftId != id<RightIndices>())));
+        };
+        return (... && unique_among_rest.template
+                       operator()<LeftIndices, id<LeftIndices>()>());
+    }
+
+    template <std::size_t... LeftIndices, std::size_t... RightIndices>
+    constexpr static auto
+    same_id_types(std::index_sequence<LeftIndices...>,
+                  std::index_sequence<RightIndices...>)
+    {
+        auto same_among_rest = []<auto LeftIndex, auto LeftId>()
+        {
+            return (... &&
+                    (std::same_as<
+                        std::remove_cv_t<decltype(LeftId)>,
+                        std::remove_cv_t<decltype(id<RightIndices>())>>));
+        };
+        return (... && same_among_rest.template
+                       operator()<LeftIndices, id<LeftIndices>()>());
+    }
+
+    using id_type = decltype(id<0>());
+};
+
+template <typename Variant>
+struct variant_checker;
+
+template <typename... Types, template <typename...> typename Variant>
+struct variant_checker<Variant<Types...>>
+{
+    using type = variant_impl<Variant<Types...>>;
+    static_assert(
+        type::unique_ids(std::make_index_sequence<sizeof...(Types)>(),
+                   std::make_index_sequence<sizeof...(Types)>()));
+    static_assert(
+        type::same_id_types(std::make_index_sequence<sizeof...(Types)>(),
+                            std::make_index_sequence<sizeof...(Types)>()));
+};
+
+template <typename Variant>
+using variant = typename variant_checker<Variant>::type;
+
+} // namespace traits
+
+namespace concepts
+{
 template <typename Type>
 concept byte_type = std::same_as<std::remove_cv_t<Type>, char> ||
                     std::same_as<std::remove_cv_t<Type>, unsigned char> ||
@@ -139,8 +270,8 @@ concept optional = requires (Type optional) {
 
 template <typename Type>
 concept owning_pointer =
-    detail::is_unique_ptr<std::remove_cvref_t<Type>>::value ||
-    detail::is_shared_ptr<std::remove_cvref_t<Type>>::value;
+    traits::is_unique_ptr<std::remove_cvref_t<Type>>::value ||
+    traits::is_shared_ptr<std::remove_cvref_t<Type>>::value;
 
 template <typename Type>
 concept unspecialized =
@@ -155,6 +286,31 @@ concept empty = requires
 };
 
 } // namespace concepts
+
+template <typename CharType, std::size_t Size>
+struct string_literal
+{
+    constexpr string_literal() = default;
+    constexpr string_literal(const CharType (&value)[Size + 1])
+    {
+        std::copy_n(std::begin(value), Size, std::begin(this->value));
+    }
+
+    constexpr auto operator<=>(const string_literal &) const = default;
+
+    constexpr default_size_type size() const
+    {
+        return Size;
+    }
+
+    using serialize = members<1>;
+
+    std::array<CharType, Size> value;
+};
+
+template <typename CharType, std::size_t Size>
+string_literal(const CharType (&value)[Size])
+    -> string_literal<CharType, Size - 1>;
 
 template <typename Item>
 class bytes
@@ -796,7 +952,6 @@ protected:
     constexpr errc serialize_one(concepts::variant auto && variant)
     {
         using type = std::remove_cvref_t<decltype(variant)>;
-        static_assert(std::variant_size_v<type> < 0xff);
 
         auto variant_index = variant.index();
         if (std::variant_npos == variant_index) [[unlikely]] {
@@ -804,8 +959,10 @@ protected:
         }
 
         return std::visit(
-            [index = static_cast<std::byte>(variant_index & 0xff),
-             this](auto & object) { return this->serialize_many(index, object); },
+            [index = variant_index, this](auto & object) {
+                return this->serialize_many(
+                    traits::variant<type>::id(index), object);
+            },
             variant);
     }
 
@@ -1212,15 +1369,16 @@ private:
     constexpr errc serialize_one(Variant<Types...> & variant) requires
         concepts::variant<Variant<Types...>>
     {
-        static_assert(sizeof...(Types) < 0xff);
+        using type = std::remove_cvref_t<decltype(variant)>;
 
-        std::byte index{};
-        if (auto result = serialize_one(index); failure(result))
+        typename traits::variant<type>::id_type id;
+        if (auto result = serialize_one(id); failure(result))
             [[unlikely]] {
             return result;
         }
 
-        if (std::size_t(index) >= sizeof...(Types)) [[unlikely]] {
+        auto index = traits::variant<type>::index(id);
+        if (index > sizeof...(Types)) [[unlikely]] {
             return std::errc::value_too_large;
         }
 
@@ -1248,7 +1406,7 @@ private:
             }
         }...};
 
-        return loaders[std::size_t(index)](*this, variant);
+        return loaders[index](*this, variant);
     }
 
     constexpr errc serialize_one(concepts::owning_pointer auto && pointer)
@@ -1349,6 +1507,88 @@ constexpr auto data_out(auto &&... option)
     return data_out{std::forward<decltype(option)>(option)...};
 }
 
+template <auto Object, std::size_t MaxSize = 1024>
+constexpr auto to_bytes()
+{
+    constexpr auto error_size = [] {
+        std::array<std::byte, MaxSize> data;
+        out out{data};
+        return std::tuple{out(Object), out.position()};
+    }();
+    constexpr auto error = std::get<0>(error_size);
+    constexpr auto size = std::get<1>(error_size);
+    static_assert(success(error));
+
+    std::array<std::byte, size> data;
+    (void) out{data}(Object);
+    return data;
+}
+
+template <auto... Data>
+constexpr auto join()
+{
+    std::array<std::byte, (0 + ... + sizeof(Data))> data;
+    (void) zpp::bits::out{data}(Data...);
+    return data;
+}
+
+template <auto... Object>
+constexpr auto to_bytes() requires (sizeof...(Object) > 1)
+{
+    return join<to_bytes<Object>()...>();
+}
+
+template <auto Data, typename Type>
+constexpr auto from_bytes()
+{
+    static_assert(success(in{Data}(Type{})));
+
+    Type object;
+    (void) in{Data}(object);
+    return object;
+}
+
+template <auto Data, typename... Types>
+constexpr auto from_bytes() requires (sizeof...(Types) > 1)
+{
+    static_assert(success(in{Data}(std::tuple{Types{}...})));
+
+    std::tuple<Types...> object;
+    (void) in{Data}(object);
+    return object;
+}
+
+template <auto Id>
+constexpr auto serialize_id()
+{
+    constexpr auto serialized_id = to_bytes<Id>();
+    if constexpr (sizeof(serialized_id) == 1) {
+        return serialization_id<from_bytes<serialized_id, std::byte>()>{};
+    } else if constexpr (sizeof(serialized_id) == 2) {
+        return serialization_id<from_bytes<serialized_id, std::uint16_t>()>{};
+    } else if constexpr (sizeof(serialized_id) == 4) {
+        return serialization_id<from_bytes<serialized_id, std::uint32_t>()>{};
+    } else if constexpr (sizeof(serialized_id) == 8) {
+        return serialization_id<from_bytes<serialized_id, std::uint64_t>()>{};
+    } else {
+        return serialization_id<serialized_id>{};
+    }
+}
+
+template <auto Id>
+using id = decltype(serialize_id<Id>());
+
+inline namespace literals
+{
+inline namespace string_literals
+{
+template <string_literal String>
+constexpr auto operator""_s()
+{
+    return String;
+}
+} // namespace string_literals
+} // namespace literals
 } // namespace zpp::bits
 
 #endif // ZPP_BITS_H
