@@ -364,6 +364,98 @@ However in this case the size is not serialized, this may be extended in the fut
 support serializing the size similar to other view types. If you need to serialize as bytes
 and want the size, as a workaround it's possible to cast to `std::span<std::byte>`.
 
+* While there is no perfect tool to handle backwards compatibility of structures because
+of the zero overhead-ness of the serialization, you can use `std::variant` as a way
+to version your classes or create a nice polymorphism based dispatching, here is how:
+```cpp
+namespace v1
+{
+struct person
+{
+    using serialize = zpp::bits::members<2>;
+
+    auto get_hobby() const
+    {
+        return "<none>"sv;
+    }
+
+    std::string name;
+    int age;
+};
+} // namespace v1
+
+namespace v2
+{
+struct person
+{
+    using serialize = zpp::bits::members<3>;
+
+    auto get_hobby() const
+    {
+        return std::string_view(hobby);
+    }
+
+    std::string name;
+    int age;
+    std::string hobby;
+};
+} // namespace v2
+```
+
+And then to the serialization itself:
+```cpp
+auto [data, in, out] = zpp::bits::data_in_out();
+out(std::variant<v1::person, v2::person>(v1::person{"Person1", 25}))
+    .or_throw();
+
+std::variant<v1::person, v2::person> v;
+in(v).or_throw();
+
+std::visit([](auto && person) {
+    (void) person.name == "Person1";
+    (void) person.age == 25;
+    (void) person.get_hobby() == "<none>";
+}, v);
+
+out(std::variant<v1::person, v2::person>(
+        v2::person{"Person2", 35, "Basketball"}))
+    .or_throw();
+
+in(v).or_throw();
+
+std::visit([](auto && person) {
+    (void) person.name == "Person2";
+    (void) person.age == 35;
+    (void) person.get_hobby() == "Basketball";
+}, v);
+```
+The way the variant gets serialized is by serializing its index (0 or 1) as a `std::byte`
+before serializing the actual object. This is very efficient, however sometimes
+users may want to choose explicit serialization id for that, refer to the point below
+
+* To set a custom serialization id, you need to add an additional line inside/outside your
+class respectively:
+```cpp
+using namespace zpp::bits::literals;
+
+// Inside the class, this serializes the full string "v1::person" before you serialize
+// the person.
+using serialize_id = zpp::bits::id<"v1::person"_s>;
+
+// Outside the class, this serializes the full string "v1::person" before you serialize
+// the person.
+auto serialize_id(const person &) -> zpp::bits::id<"v1::person"_s>;
+```
+Note that the serialization ids of types in the variant must match in length, or a
+compilation error will issue.
+
+You may also use any sequence of bytes instead of a readable string, as well as an integer
+or any literal type.
+
+The type is then converted to bytes at compile time using (... wait for it) `zpp::bits::out`
+at compile time, so as long as your literal type is serializable according to the above,
+you can use it as a serialization id.
+
 * As part of the library implementation it was required to implement some reflection types, for
 counting members and visiting members, and the library exposes these to the user:
 ```cpp
@@ -426,12 +518,6 @@ static_assert(
 
 Limitations
 -----------
-* Currently there is no explicit tool to handle backwards compatibility of structures, the only
-overhead that is generated is also part of the data structures anyway, which is size of variable length types,
-which is the active member of a variant, and whether an optional holds a value, which does not leave much metadata
-for backwards compatibility. However, a neat way to achieve some versioning is by using `std::variant`, and versioning
-your types this way `std::variant<version1::type, version2::type, version3::type, ...>` and then use `std::visit()`
-to get called with the right version.
 * Serialization of non-owning pointers & raw pointers is not supported, for simplicity and also for security reasons.
 * Serialization of null pointers is not supported to avoid the default overhead of stating whether a pointer is null, to
 work around this use optional which is more explicit.
