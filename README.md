@@ -450,11 +450,39 @@ Note that the serialization ids of types in the variant must match in length, or
 compilation error will issue.
 
 You may also use any sequence of bytes instead of a readable string, as well as an integer
-or any literal type.
+or any literal type, here is an example of how to use a hash of a string as a serialization
+id:
+```cpp
+using namespace zpp::bits::literals;
+
+// Inside:
+using serialize_id = zpp::bits::id<"v1::person"_sha1>; // Sha1
+using serialize_id = zpp::bits::id<"v1::person"_sha256>; // Sha256
+
+// Outside:
+auto serialize_id(const person &) -> zpp::bits::id<"v1::person"_sha1>; // Sha1
+auto serialize_id(const person &) -> zpp::bits::id<"v1::person"_sha256>; // Sha256
+```
+
+You can also serialize just the first bytes of the hash, like so:
+```cpp
+// First 4 bytes of hash:
+using serialize_id = zpp::bits::id<"v1::person"_sha256, 4>; // First 4 bytes of sha256
+```
 
 The type is then converted to bytes at compile time using (... wait for it) `zpp::bits::out`
 at compile time, so as long as your literal type is serializable according to the above,
 you can use it as a serialization id.
+
+* If you want to serialize the variant without an id, or if you know that a variant is going to
+have a particular ID upon deserialize, you may do it using `zpp::bits::known_id` to wrap your variant:
+```cpp
+std::variant<v1::person, v2::person> v;
+
+ // Id assumed to be v2::person, and is not serialized / deserialized.
+out(zpp::bits::known_id<"v2::person"_sha256, 4>(v));
+in(zpp::bits::known_id<"v2::person"_sha256, 4>(v));
+```
 
 * As part of the library implementation it was required to implement some reflection types, for
 counting members and visiting members, and the library exposes these to the user:
