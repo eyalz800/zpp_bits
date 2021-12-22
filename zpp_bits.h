@@ -5,6 +5,7 @@
 #define ZPP_BITS_AUTODETECT_MEMBERS_MODE (0)
 #endif
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <climits>
@@ -93,6 +94,8 @@ struct variant_impl;
 template <typename... Types, template <typename...> typename Variant>
 struct variant_impl<Variant<Types...>>
 {
+    using variant_type = Variant<Types...>;
+
     template <std::size_t Index,
               std::size_t CurrentIndex,
               typename FirstType,
@@ -144,6 +147,18 @@ struct variant_impl<Variant<Types...>>
         }
     }
 
+    template <auto Id, std::size_t CurrentIndex = 0>
+    constexpr static std::size_t index()
+    {
+        static_assert(CurrentIndex < sizeof...(Types));
+
+        if constexpr (variant_impl::id<CurrentIndex>() == Id) {
+            return CurrentIndex;
+        } else {
+            return index<Id, CurrentIndex + 1>();
+        }
+    }
+
     template <std::size_t CurrentIndex = 0>
     constexpr static std::size_t index(auto && id)
     {
@@ -186,6 +201,23 @@ struct variant_impl<Variant<Types...>>
         };
         return (... && same_among_rest.template
                        operator()<LeftIndices, id<LeftIndices>()>());
+    }
+
+    template <typename Type, std::size_t... Indices>
+    constexpr static std::size_t index_by_type(std::index_sequence<Indices...>)
+    {
+        return ((std::same_as<
+                     Type,
+                     std::variant_alternative_t<Indices, variant_type>> *
+                 Indices) +
+                ...);
+    }
+
+    template <typename Type>
+    constexpr static std::size_t index_by_type()
+    {
+        return index_by_type<Type>(
+            std::make_index_sequence<std::variant_size_v<variant_type>>{});
     }
 
     using id_type = decltype(id<0>());
@@ -245,7 +277,6 @@ template <typename Type>
 concept tuple = !container<Type> && requires(Type tuple)
 {
     std::get<0>(tuple);
-    std::get<1>(tuple);
     sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
 }
 &&!requires(Type tuple)
@@ -288,24 +319,56 @@ concept empty = requires
 } // namespace concepts
 
 template <typename CharType, std::size_t Size>
-struct string_literal
+struct string_literal : public std::array<CharType, Size + 1>
 {
+    using base = std::array<CharType, Size + 1>;
+    using value_type = typename base::value_type;
+    using pointer = typename base::pointer;
+    using const_pointer = typename base::const_pointer;
+    using iterator = typename base::iterator;
+    using const_iterator = typename base::const_iterator;
+    using reference = typename base::const_pointer;
+    using const_reference = typename base::const_pointer;
+    using size_type = default_size_type;
+
     constexpr string_literal() = default;
     constexpr string_literal(const CharType (&value)[Size + 1])
     {
-        std::copy_n(std::begin(value), Size, std::begin(this->value));
+        std::copy_n(std::begin(value), Size + 1, std::begin(*this));
     }
 
     constexpr auto operator<=>(const string_literal &) const = default;
-
     constexpr default_size_type size() const
     {
         return Size;
     }
 
-    using serialize = members<1>;
+    constexpr bool empty() const
+    {
+        return !Size;
+    }
 
-    std::array<CharType, Size> value;
+    using base::begin;
+
+    constexpr auto end()
+    {
+        return base::end() - 1;
+    }
+
+    constexpr auto end() const
+    {
+        return base::end() - 1;
+    }
+
+    using base::data;
+    using base::operator[];
+    using base::at;
+
+private:
+    using base::cbegin;
+    using base::cend;
+    using base::rbegin;
+    using base::rend;
 };
 
 template <typename CharType, std::size_t Size>
@@ -718,6 +781,9 @@ public:
     template <typename, concepts::container>
     friend struct sized_container;
 
+    template <typename, concepts::variant>
+    friend struct known_id_variant;
+
     using value_type = typename ByteView::value_type;
 
     constexpr explicit basic_out(ByteView && view) : m_data(view)
@@ -958,21 +1024,30 @@ protected:
         }
     }
 
+    template <typename KnownId = void>
     constexpr errc serialize_one(concepts::variant auto && variant)
     {
-        using type = std::remove_cvref_t<decltype(variant)>;
+        if constexpr (!std::is_void_v<KnownId>) {
+            return std::visit(
+                [this](auto & object) {
+                    return this->serialize_one(object);
+                },
+                variant);
+        } else {
+            using type = std::remove_cvref_t<decltype(variant)>;
 
-        auto variant_index = variant.index();
-        if (std::variant_npos == variant_index) [[unlikely]] {
-            return std::errc::invalid_argument;
+            auto variant_index = variant.index();
+            if (std::variant_npos == variant_index) [[unlikely]] {
+                return std::errc::invalid_argument;
+            }
+
+            return std::visit(
+                [index = variant_index, this](auto & object) {
+                    return this->serialize_many(
+                        traits::variant<type>::id(index), object);
+                },
+                variant);
         }
-
-        return std::visit(
-            [index = variant_index, this](auto & object) {
-                return this->serialize_many(
-                    traits::variant<type>::id(index), object);
-            },
-            variant);
     }
 
     constexpr errc serialize_one(concepts::owning_pointer auto && pointer)
@@ -1052,6 +1127,9 @@ public:
 
     template <typename, concepts::container>
     friend struct sized_container;
+
+    template <typename, concepts::variant>
+    friend struct known_id_variant;
 
     using value_type =
         std::conditional_t<std::is_const_v<std::remove_reference_t<
@@ -1374,48 +1452,84 @@ private:
         return {};
     }
 
-    template <typename... Types, template <typename...> typename Variant>
+    template <typename KnownId = void, typename... Types, template <typename...> typename Variant>
     constexpr errc serialize_one(Variant<Types...> & variant) requires
         concepts::variant<Variant<Types...>>
     {
         using type = std::remove_cvref_t<decltype(variant)>;
 
-        typename traits::variant<type>::id_type id;
-        if (auto result = serialize_one(id); failure(result))
-            [[unlikely]] {
-            return result;
-        }
+        if constexpr (!std::is_void_v<KnownId>) {
+            constexpr auto index =
+                traits::variant<type>::template index<KnownId::value>();
 
-        auto index = traits::variant<type>::index(id);
-        if (index > sizeof...(Types)) [[unlikely]] {
-            return std::errc::value_too_large;
-        }
+            using element_type =
+                std::remove_reference_t<decltype(std::get<index>(
+                    variant))>;
 
-        using loader_type =
-            errc (*)(decltype(*this), decltype(variant) &);
-
-        constexpr loader_type loaders[] = {[](auto & self, auto & variant) {
-            if constexpr (std::is_default_constructible_v<Types>) {
-                if (!std::get_if<Types>(&variant)) {
-                    variant = Types{};
+            if constexpr (std::is_default_constructible_v<element_type>) {
+                if (variant.index() !=
+                    traits::variant<type>::template index_by_type<
+                        element_type>()) {
+                    variant = element_type{};
                 }
-                return self.serialize_one(*std::get_if<Types>(&variant));
+                return serialize_one(*std::get_if<element_type>(&variant));
             } else {
-                std::aligned_storage_t<sizeof(Types), alignof(Types)> storage;
+                std::aligned_storage_t<sizeof(element_type),
+                                       alignof(element_type)>
+                    storage;
 
-                std::unique_ptr<Types, void (*)(Types *)> object(
-                    access::placement_new<Types>(std::addressof(storage)),
-                    [](auto pointer) { access::destruct(*pointer); });
+                std::unique_ptr<element_type, void (*)(element_type *)>
+                    object(
+                        access::placement_new<element_type>(
+                            std::addressof(storage)),
+                        [](auto pointer) { access::destruct(*pointer); });
 
-                if (auto result = self.serialize_one(*object);
-                    failure(result)) [[unlikely]] {
+                if (auto result = serialize_one(*object); failure(result))
+                    [[unlikely]] {
                     return result;
                 }
                 variant = std::move(*object);
             }
-        }...};
+        } else {
+            typename traits::variant<type>::id_type id;
+            if (auto result = serialize_one(id); failure(result))
+                [[unlikely]] {
+                return result;
+            }
 
-        return loaders[index](*this, variant);
+            auto index = traits::variant<type>::index(id);
+            if (index > sizeof...(Types)) [[unlikely]] {
+                return std::errc::value_too_large;
+            }
+
+            using loader_type =
+                errc (*)(decltype(*this), decltype(variant) &);
+
+            constexpr loader_type loaders[] = {[](auto & self, auto & variant) {
+                if constexpr (std::is_default_constructible_v<Types>) {
+                    if (variant.index() !=
+                        traits::variant<type>::template index_by_type<
+                            Types>()) {
+                        variant = Types{};
+                    }
+                    return self.serialize_one(*std::get_if<Types>(&variant));
+                } else {
+                    std::aligned_storage_t<sizeof(Types), alignof(Types)> storage;
+
+                    std::unique_ptr<Types, void (*)(Types *)> object(
+                        access::placement_new<Types>(std::addressof(storage)),
+                        [](auto pointer) { access::destruct(*pointer); });
+
+                    if (auto result = self.serialize_one(*object);
+                        failure(result)) [[unlikely]] {
+                        return result;
+                    }
+                    variant = std::move(*object);
+                }
+            }...};
+
+            return loaders[index](*this, variant);
+        }
     }
 
     constexpr errc serialize_one(concepts::owning_pointer auto && pointer)
@@ -1516,8 +1630,8 @@ constexpr auto data_out(auto &&... option)
     return data_out{std::forward<decltype(option)>(option)...};
 }
 
-template <auto Object, std::size_t MaxSize = 1024>
-constexpr auto to_bytes()
+template <auto Object, std::size_t MaxSize = 0x1000>
+constexpr auto to_bytes_one()
 {
     constexpr auto error_size = [] {
         std::array<std::byte, MaxSize> data;
@@ -1528,9 +1642,13 @@ constexpr auto to_bytes()
     constexpr auto size = std::get<1>(error_size);
     static_assert(success(error));
 
-    std::array<std::byte, size> data;
-    (void) out{data}(Object);
-    return data;
+    if constexpr (!size) {
+        return std::array<std::byte, 1>{};
+    } else {
+        std::array<std::byte, size> data;
+        (void) out{data}(Object);
+        return data;
+    }
 }
 
 template <auto... Data>
@@ -1541,10 +1659,25 @@ constexpr auto join()
     return data;
 }
 
-template <auto... Object>
-constexpr auto to_bytes() requires (sizeof...(Object) > 1)
+template <auto Left, auto Right = -1>
+constexpr auto slice(auto array)
 {
-    return join<to_bytes<Object>()...>();
+    constexpr auto left = Left;
+    constexpr auto right = (-1 == Right) ? array.size() : Right;
+    constexpr auto size = right - left;
+    static_assert(Left < Right || -1 == Right);
+
+    std::array<std::remove_reference_t<decltype(array[0])>, size> sliced;
+    std::copy(std::begin(array) + left,
+              std::begin(array) + right,
+              std::begin(sliced));
+    return sliced;
+}
+
+template <auto... Object>
+constexpr auto to_bytes()
+{
+    return join<to_bytes_one<Object>()...>();
 }
 
 template <auto Data, typename Type>
@@ -1567,10 +1700,10 @@ constexpr auto from_bytes() requires (sizeof...(Types) > 1)
     return object;
 }
 
-template <auto Id>
+template <auto Id, auto MaxSize = -1>
 constexpr auto serialize_id()
 {
-    constexpr auto serialized_id = to_bytes<Id>();
+    constexpr auto serialized_id = slice<0, MaxSize>(to_bytes<Id>());
     if constexpr (sizeof(serialized_id) == 1) {
         return serialization_id<from_bytes<serialized_id, std::byte>()>{};
     } else if constexpr (sizeof(serialized_id) == 2) {
@@ -1584,8 +1717,406 @@ constexpr auto serialize_id()
     }
 }
 
-template <auto Id>
-using id = decltype(serialize_id<Id>());
+template <auto Id, auto MaxSize = -1>
+using id = decltype(serialize_id<Id, MaxSize>());
+
+template <typename Id, concepts::variant Variant>
+struct known_id_variant
+{
+    constexpr explicit known_id_variant(Variant & variant) :
+        variant(variant)
+    {
+    }
+
+    constexpr static auto serialize(auto & serializer, auto & self)
+    {
+        return serializer.template serialize_one<Id>(self.variant);
+    }
+
+    Variant & variant;
+};
+
+template <auto Id, auto MaxSize = -1, typename Variant>
+constexpr auto known_id(Variant && variant)
+{
+    return known_id_variant<id<Id, MaxSize>,
+                            std::remove_reference_t<Variant>>(variant);
+}
+
+template <typename Type>
+struct big_endian
+{
+    struct emplace{};
+
+    constexpr big_endian() = default;
+
+    constexpr explicit big_endian(Type value, emplace) : value(value)
+    {
+    }
+
+    constexpr explicit big_endian(Type value)
+    {
+        std::array<std::byte, sizeof(value)> data;
+        for (std::size_t i = 0; i < sizeof(value); ++i) {
+            data[sizeof(value) - 1 - i] = std::byte(value & 0xff);
+            value >>= CHAR_BIT;
+        }
+
+        this->value = std::bit_cast<Type>(data);
+    }
+
+    constexpr auto operator<<(auto value) const
+    {
+        auto data =
+            std::bit_cast<std::array<unsigned char, sizeof(*this)>>(*this);
+
+        for (std::size_t i = 0; i < sizeof(Type); ++i) {
+            auto offset = (value % CHAR_BIT);
+            auto current = i + (value / CHAR_BIT);
+
+            if (current >= sizeof(Type)) {
+                data[i] = 0;
+                continue;
+            }
+
+            data[i] = data[current] << offset;
+            if (current == sizeof(Type) - 1) {
+                continue;
+            }
+
+            offset = CHAR_BIT - offset;
+            if (offset >= 0) {
+                data[i] |= data[current + 1] >> offset;
+            } else {
+                data[i] |= data[current + 1] << (-offset);
+            }
+        }
+
+        return std::bit_cast<big_endian>(data);
+    }
+
+    constexpr auto operator>>(auto value) const
+    {
+        auto data =
+            std::bit_cast<std::array<unsigned char, sizeof(*this)>>(*this);
+
+        for (std::size_t j = 0; j < sizeof(Type); ++j) {
+            auto i = sizeof(Type) - 1 - j;
+            auto offset = (value % CHAR_BIT);
+            auto current = i - (value / CHAR_BIT);
+
+            if (current >= sizeof(Type)) {
+                data[i] = 0;
+                continue;
+            }
+
+            data[i] = data[current] >> offset;
+            if (!current) {
+                continue;
+            }
+
+            offset = CHAR_BIT - offset;
+            if (offset >= 0) {
+                data[i] |= data[current - 1] << offset;
+            } else {
+                data[i] |= data[current - 1] >> (-offset);
+            }
+        }
+
+        return std::bit_cast<big_endian>(data);
+    }
+
+    constexpr auto friend operator+(big_endian left, big_endian right)
+    {
+        auto left_data = std::bit_cast<std::array<unsigned char, sizeof(left)>>(left);
+        auto right_data = std::bit_cast<std::array<unsigned char, sizeof(right)>>(right);
+        unsigned char remaining{};
+
+        for (std::size_t i = 0; i < sizeof(Type); ++i) {
+            auto current = sizeof(Type) - 1 - i;
+            std::uint16_t byte_addition =
+                std::uint16_t(left_data[current]) +
+                std::uint16_t(right_data[current]) + remaining;
+            left_data[current] = std::uint8_t(byte_addition & 0xff);
+            remaining = std::uint8_t((byte_addition >> CHAR_BIT) & 0xff);
+        }
+
+        return std::bit_cast<big_endian>(left_data);
+    }
+
+    constexpr big_endian operator~() const
+    {
+        return big_endian{~value, emplace{}};
+    }
+
+    constexpr auto & operator+=(big_endian other)
+    {
+        *this = (*this) + other;
+        return *this;
+    }
+
+    constexpr auto friend operator&(big_endian left, big_endian right)
+    {
+        return big_endian{left.value & right.value, emplace{}};
+    }
+
+    constexpr auto friend operator^(big_endian left, big_endian right)
+    {
+        return big_endian{left.value ^ right.value, emplace{}};
+    }
+
+    constexpr auto friend operator|(big_endian left, big_endian right)
+    {
+        return big_endian{left.value | right.value, emplace{}};
+    }
+
+    constexpr auto friend operator<=>(big_endian left,
+                                      big_endian right) = default;
+
+    using serialize = members<1>;
+
+    Type value{};
+};
+
+template <auto Object, typename Digest = std::array<std::byte, 20>>
+requires requires
+{
+    requires success(in{Digest{}}(std::array<std::byte, 20>{}));
+}
+constexpr auto sha1()
+{
+    auto rotate_left = [](auto n, auto c) {
+        return (n << c) | (n >> ((sizeof(n) * CHAR_BIT) - c));
+    };
+    auto align = [](auto v, auto a) { return (v + (a - 1)) / a * a; };
+
+    auto h0 = big_endian{std::uint32_t{0x67452301u}};
+    auto h1 = big_endian{std::uint32_t{0xefcdab89u}};
+    auto h2 = big_endian{std::uint32_t{0x98badcfeu}};
+    auto h3 = big_endian{std::uint32_t{0x10325476u}};
+    auto h4 = big_endian{std::uint32_t{0xc3d2e1f0u}};
+
+    constexpr auto empty = requires
+    {
+        requires concepts::container<decltype(Object)> && Object.empty();
+    };
+    constexpr auto original_message = to_bytes<Object>();
+    constexpr auto original_message_size = empty ? 0 : original_message.size();
+    constexpr auto message_with_0x80 = [&] {
+        if constexpr (empty) {
+            return to_bytes<std::byte{0x80}>();
+        } else {
+            return to_bytes<original_message, std::byte{0x80}>();
+        }
+    }();
+
+    constexpr auto chunk_size = 512 / CHAR_BIT;
+    constexpr auto message =
+        to_bytes<message_with_0x80,
+                 std::array<std::byte,
+                            align(message_with_0x80.size(), chunk_size) -
+                                message_with_0x80.size() -
+                                sizeof(original_message_size)>{},
+                 big_endian<std::uint64_t>{original_message_size *
+                                           CHAR_BIT}>();
+
+    for (auto chunk :
+         from_bytes<message,
+                    std::array<std::array<big_endian<std::uint32_t>, 16>,
+                               message.size() / chunk_size>>()) {
+        std::array<big_endian<std::uint32_t>, 80> w;
+        std::copy(std::begin(chunk), std::end(chunk), std::begin(w));
+
+        for (std::size_t i = 16; i < w.size(); ++i) {
+            w[i] = rotate_left(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16],
+                               1);
+        }
+
+        auto a = h0;
+        auto b = h1;
+        auto c = h2;
+        auto d = h3;
+        auto e = h4;
+
+        for (std::size_t i = 0; i < w.size(); ++i) {
+            auto f = big_endian{std::uint32_t{}};
+            auto k = big_endian{std::uint32_t{}};
+            if (i <= 19) {
+                f = (b & c) | ((~b) & d);
+                k = big_endian{std::uint32_t{0x5a827999u}};
+            } else if (i <= 39) {
+                f = b ^ c ^ d;
+                k = big_endian{std::uint32_t{0x6ed9eba1u}};
+            } else if (i <= 59) {
+                f = (b & c) | (b & d) | (c & d);
+                k = big_endian{std::uint32_t{0x8f1bbcdcu}};
+            } else {
+                f = b ^ c ^ d;
+                k = big_endian{std::uint32_t{0xca62c1d6u}};
+            }
+
+            auto temp = rotate_left(a, 5) + f + e + k + w[i];
+            e = d;
+            d = c;
+            c = rotate_left(b, 30);
+            b = a;
+            a = temp;
+        }
+
+        h0 += a;
+        h1 += b;
+        h2 += c;
+        h3 += d;
+        h4 += e;
+    }
+
+    std::array<std::byte, 20> digest_data;
+    (void)out{digest_data}(h0, h1, h2, h3, h4);
+
+    Digest digest;
+    (void)in{digest_data}(digest);
+    return digest;
+}
+
+template <auto Object, typename Digest = std::array<std::byte, 32>>
+requires requires
+{
+    requires success(in{Digest{}}(std::array<std::byte, 32>{}));
+}
+constexpr auto sha256()
+{
+    auto rotate_right = [](auto n, auto c) {
+        return (n >> c) | (n << ((sizeof(n) * CHAR_BIT) - c));
+    };
+    auto align = [](auto v, auto a) { return (v + (a - 1)) / a * a; };
+
+    auto h0 = big_endian{0x6a09e667u};
+    auto h1 = big_endian{0xbb67ae85u};
+    auto h2 = big_endian{0x3c6ef372u};
+    auto h3 = big_endian{0xa54ff53au};
+    auto h4 = big_endian{0x510e527fu};
+    auto h5 = big_endian{0x9b05688cu};
+    auto h6 = big_endian{0x1f83d9abu};
+    auto h7 = big_endian{0x5be0cd19u};
+
+    std::array k{big_endian{0x428a2f98u}, big_endian{0x71374491u},
+                 big_endian{0xb5c0fbcfu}, big_endian{0xe9b5dba5u},
+                 big_endian{0x3956c25bu}, big_endian{0x59f111f1u},
+                 big_endian{0x923f82a4u}, big_endian{0xab1c5ed5u},
+                 big_endian{0xd807aa98u}, big_endian{0x12835b01u},
+                 big_endian{0x243185beu}, big_endian{0x550c7dc3u},
+                 big_endian{0x72be5d74u}, big_endian{0x80deb1feu},
+                 big_endian{0x9bdc06a7u}, big_endian{0xc19bf174u},
+                 big_endian{0xe49b69c1u}, big_endian{0xefbe4786u},
+                 big_endian{0x0fc19dc6u}, big_endian{0x240ca1ccu},
+                 big_endian{0x2de92c6fu}, big_endian{0x4a7484aau},
+                 big_endian{0x5cb0a9dcu}, big_endian{0x76f988dau},
+                 big_endian{0x983e5152u}, big_endian{0xa831c66du},
+                 big_endian{0xb00327c8u}, big_endian{0xbf597fc7u},
+                 big_endian{0xc6e00bf3u}, big_endian{0xd5a79147u},
+                 big_endian{0x06ca6351u}, big_endian{0x14292967u},
+                 big_endian{0x27b70a85u}, big_endian{0x2e1b2138u},
+                 big_endian{0x4d2c6dfcu}, big_endian{0x53380d13u},
+                 big_endian{0x650a7354u}, big_endian{0x766a0abbu},
+                 big_endian{0x81c2c92eu}, big_endian{0x92722c85u},
+                 big_endian{0xa2bfe8a1u}, big_endian{0xa81a664bu},
+                 big_endian{0xc24b8b70u}, big_endian{0xc76c51a3u},
+                 big_endian{0xd192e819u}, big_endian{0xd6990624u},
+                 big_endian{0xf40e3585u}, big_endian{0x106aa070u},
+                 big_endian{0x19a4c116u}, big_endian{0x1e376c08u},
+                 big_endian{0x2748774cu}, big_endian{0x34b0bcb5u},
+                 big_endian{0x391c0cb3u}, big_endian{0x4ed8aa4au},
+                 big_endian{0x5b9cca4fu}, big_endian{0x682e6ff3u},
+                 big_endian{0x748f82eeu}, big_endian{0x78a5636fu},
+                 big_endian{0x84c87814u}, big_endian{0x8cc70208u},
+                 big_endian{0x90befffau}, big_endian{0xa4506cebu},
+                 big_endian{0xbef9a3f7u}, big_endian{0xc67178f2u}};
+
+    constexpr auto empty = requires
+    {
+        requires concepts::container<decltype(Object)> && Object.empty();
+    };
+    constexpr auto original_message = to_bytes<Object>();
+    constexpr auto original_message_size = empty ? 0 : original_message.size();
+    constexpr auto message_with_0x80 = [&] {
+        if constexpr (empty) {
+            return to_bytes<std::byte{0x80}>();
+        } else {
+            return to_bytes<original_message, std::byte{0x80}>();
+        }
+    }();
+
+    constexpr auto chunk_size = 512 / CHAR_BIT;
+    constexpr auto message =
+        to_bytes<message_with_0x80,
+                 std::array<std::byte,
+                            align(message_with_0x80.size(), chunk_size) -
+                                message_with_0x80.size() -
+                                sizeof(original_message_size)>{},
+                 big_endian<std::uint64_t>{original_message_size *
+                                           CHAR_BIT}>();
+
+    for (auto chunk :
+         from_bytes<message,
+                    std::array<std::array<big_endian<std::uint32_t>, 16>,
+                               message.size() / chunk_size>>()) {
+        std::array<big_endian<std::uint32_t>, 64> w;
+        std::copy(std::begin(chunk), std::end(chunk), std::begin(w));
+
+        for (std::size_t i = 16; i < w.size(); ++i) {
+            auto s0 = rotate_right(w[i - 15], 7) ^
+                      rotate_right(w[i - 15], 18) ^ (w[i - 15] >> 3);
+            auto s1 = rotate_right(w[i - 2], 17) ^
+                      rotate_right(w[i - 2], 19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+        }
+
+        auto a = h0;
+        auto b = h1;
+        auto c = h2;
+        auto d = h3;
+        auto e = h4;
+        auto f = h5;
+        auto g = h6;
+        auto h = h7;
+
+        for (std::size_t i = 0; i < w.size(); ++i) {
+            auto s1 = rotate_right(e, 6) ^ rotate_right(e, 11) ^
+                      rotate_right(e, 25);
+            auto ch = (e & f) xor ((~e) & g);
+            auto temp1 = h + s1 + ch + k[i] + w[i];
+            auto s0 = rotate_right(a, 2) ^ rotate_right(a, 13) ^
+                      rotate_right(a, 22);
+            auto maj = (a & b) ^ (a & c) ^ (b & c);
+            auto temp2 = s0 + maj;
+
+            h = g;
+            g = f;
+            f = e;
+            e = d + temp1;
+            d = c;
+            c = b;
+            b = a;
+            a = temp1 + temp2;
+        }
+
+        h0 = h0 + a;
+        h1 = h1 + b;
+        h2 = h2 + c;
+        h3 = h3 + d;
+        h4 = h4 + e;
+        h5 = h5 + f;
+        h6 = h6 + g;
+        h7 = h7 + h;
+    }
+
+    std::array<std::byte, 32> digest_data;
+    (void)out{digest_data}(h0, h1, h2, h3, h4, h5, h6, h7);
+
+    Digest digest;
+    (void)in{digest_data}(digest);
+    return digest;
+}
 
 inline namespace literals
 {
@@ -1595,6 +2126,60 @@ template <string_literal String>
 constexpr auto operator""_s()
 {
     return String;
+}
+
+template <string_literal String>
+constexpr auto operator""_b()
+{
+    return to_bytes<String>();
+}
+
+template <string_literal String>
+constexpr auto operator""_unhexlify()
+{
+    constexpr auto tolower = [](auto c) {
+        if ('A' <= c && c <= 'Z') {
+            return decltype(c)(c - 'A' + 'a');
+        }
+        return c;
+    };
+
+    static_assert(String.size() % 2 == 0);
+
+    static_assert(
+        std::find_if(std::begin(String), std::end(String), [&](auto c) {
+            return !(('0' <= c && c <= '9') ||
+                     ('a' <= tolower(c) && tolower(c) <= 'f'));
+        }) == std::end(String));
+
+    auto hex = [](auto c) {
+        if ('a' <= c) {
+            return c - 'a' + 0xa;
+        } else {
+            return c - '0';
+        }
+    };
+
+    std::array<std::byte, String.size() / 2> data;
+    for (std::size_t i = 0; auto & b : data) {
+        auto left = tolower(String[i]);
+        auto right = tolower(String[i + 1]);
+        b = std::byte((hex(left) << (CHAR_BIT/2)) | hex(right));
+        i += 2;
+    }
+    return data;
+}
+
+template <string_literal String>
+constexpr auto operator""_sha1()
+{
+    return sha1<String>();
+}
+
+template <string_literal String>
+constexpr auto operator""_sha256()
+{
+    return sha256<String>();
 }
 } // namespace string_literals
 } // namespace literals
