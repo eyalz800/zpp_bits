@@ -472,7 +472,9 @@ using serialize_id = zpp::bits::id<"v1::person"_sha256, 4>; // First 4 bytes of 
 
 The type is then converted to bytes at compile time using (... wait for it) `zpp::bits::out`
 at compile time, so as long as your literal type is serializable according to the above,
-you can use it as a serialization id.
+you can use it as a serialization id. The id is serialized to `std::array<std::byte, N>` however
+for 1, 2, 4, and 8 bytes its underlying type is `std::byte` `std::uint16_t`, `std::uin32_t` and
+`std::uint64_t` respectively for ease of use and efficiency.
 
 * If you want to serialize the variant without an id, or if you know that a variant is going to
 have a particular ID upon deserialize, you may do it using `zpp::bits::known_id` to wrap your variant:
@@ -485,6 +487,8 @@ in(zpp::bits::known_id<"v2::person"_sha256, 4>(v));
 
 // When deserializing you can pass the id as function parameter, to be able
 // to use outside of compile time context. `id_v` stands for "id value".
+// In our case 4 bytes translates to a plain std::uint32_t, so any dynamic
+// integer could fit as the first parameter to `known_id` below.
 in(zpp::bits::known_id(zpp::bits::id_v<"v2::person"_sha256, 4>, v));
 ```
 

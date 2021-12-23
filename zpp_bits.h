@@ -1767,7 +1767,13 @@ constexpr auto known_id(Variant && variant)
 template <typename Id, concepts::variant Variant>
 struct known_dynamic_id_variant
 {
-    constexpr explicit known_dynamic_id_variant(Variant & variant, Id & id) :
+    using id_type =
+        std::conditional_t<std::is_integral_v<std::remove_cvref_t<Id>> ||
+                               std::is_enum_v<std::remove_cvref_t<Id>>,
+                           std::remove_cvref_t<Id>,
+                           Id &>;
+
+    constexpr explicit known_dynamic_id_variant(Variant & variant, id_type id) :
         variant(variant),
         id(id)
     {
@@ -1779,7 +1785,7 @@ struct known_dynamic_id_variant
     }
 
     Variant & variant;
-    Id & id;
+    id_type id;
 };
 
 template <typename Id, typename Variant>
