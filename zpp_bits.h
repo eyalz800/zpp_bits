@@ -1518,7 +1518,7 @@ private:
 
         auto index = traits::variant<type>::index(id);
         if (index > sizeof...(Types)) [[unlikely]] {
-            return std::errc::value_too_large;
+            return std::errc::bad_message;
         }
 
         using loader_type =
