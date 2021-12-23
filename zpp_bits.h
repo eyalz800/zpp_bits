@@ -784,6 +784,9 @@ public:
     template <typename, concepts::variant>
     friend struct known_id_variant;
 
+    template <typename, concepts::variant>
+    friend struct known_dynamic_id_variant;
+
     using value_type = typename ByteView::value_type;
 
     constexpr explicit basic_out(ByteView && view) : m_data(view)
@@ -1130,6 +1133,9 @@ public:
     template <typename, concepts::variant>
     friend struct known_id_variant;
 
+    template <typename, concepts::variant>
+    friend struct known_dynamic_id_variant;
+
     using value_type =
         std::conditional_t<std::is_const_v<std::remove_reference_t<
                                decltype(std::declval<ByteView>()[1])>>,
@@ -1451,7 +1457,10 @@ private:
         return {};
     }
 
-    template <typename KnownId = void, typename... Types, template <typename...> typename Variant>
+    template <typename KnownId = void,
+              typename... Types,
+              template <typename...>
+              typename Variant>
     constexpr errc serialize_one(Variant<Types...> & variant) requires
         concepts::variant<Variant<Types...>>
     {
@@ -1496,39 +1505,49 @@ private:
                 return result;
             }
 
-            auto index = traits::variant<type>::index(id);
-            if (index > sizeof...(Types)) [[unlikely]] {
-                return std::errc::value_too_large;
-            }
-
-            using loader_type =
-                errc (*)(decltype(*this), decltype(variant) &);
-
-            constexpr loader_type loaders[] = {[](auto & self, auto & variant) {
-                if constexpr (std::is_default_constructible_v<Types>) {
-                    if (variant.index() !=
-                        traits::variant<type>::template index_by_type<
-                            Types>()) {
-                        variant = Types{};
-                    }
-                    return self.serialize_one(*std::get_if<Types>(&variant));
-                } else {
-                    std::aligned_storage_t<sizeof(Types), alignof(Types)> storage;
-
-                    std::unique_ptr<Types, void (*)(Types *)> object(
-                        access::placement_new<Types>(std::addressof(storage)),
-                        [](auto pointer) { access::destruct(*pointer); });
-
-                    if (auto result = self.serialize_one(*object);
-                        failure(result)) [[unlikely]] {
-                        return result;
-                    }
-                    variant = std::move(*object);
-                }
-            }...};
-
-            return loaders[index](*this, variant);
+            return serialize_one(variant, id);
         }
+    }
+
+    template <typename... Types, template <typename...> typename Variant>
+    constexpr errc
+    serialize_one(Variant<Types...> & variant,
+                  auto && id) requires concepts::variant<Variant<Types...>>
+    {
+        using type = std::remove_cvref_t<decltype(variant)>;
+
+        auto index = traits::variant<type>::index(id);
+        if (index > sizeof...(Types)) [[unlikely]] {
+            return std::errc::value_too_large;
+        }
+
+        using loader_type =
+            errc (*)(decltype(*this), decltype(variant) &);
+
+        constexpr loader_type loaders[] = {[](auto & self, auto & variant) {
+            if constexpr (std::is_default_constructible_v<Types>) {
+                if (variant.index() !=
+                    traits::variant<type>::template index_by_type<
+                        Types>()) {
+                    variant = Types{};
+                }
+                return self.serialize_one(*std::get_if<Types>(&variant));
+            } else {
+                std::aligned_storage_t<sizeof(Types), alignof(Types)> storage;
+
+                std::unique_ptr<Types, void (*)(Types *)> object(
+                    access::placement_new<Types>(std::addressof(storage)),
+                    [](auto pointer) { access::destruct(*pointer); });
+
+                if (auto result = self.serialize_one(*object);
+                    failure(result)) [[unlikely]] {
+                    return result;
+                }
+                variant = std::move(*object);
+            }
+        }...};
+
+        return loaders[index](*this, variant);
     }
 
     constexpr errc serialize_one(concepts::owning_pointer auto && pointer)
@@ -1719,6 +1738,9 @@ constexpr auto serialize_id()
 template <auto Id, auto MaxSize = -1>
 using id = decltype(serialize_id<Id, MaxSize>());
 
+template <auto Id, auto MaxSize = -1>
+constexpr auto id_v = id<Id, MaxSize>::value;
+
 template <typename Id, concepts::variant Variant>
 struct known_id_variant
 {
@@ -1740,6 +1762,31 @@ constexpr auto known_id(Variant && variant)
 {
     return known_id_variant<id<Id, MaxSize>,
                             std::remove_reference_t<Variant>>(variant);
+}
+
+template <typename Id, concepts::variant Variant>
+struct known_dynamic_id_variant
+{
+    constexpr explicit known_dynamic_id_variant(Variant & variant, Id & id) :
+        variant(variant),
+        id(id)
+    {
+    }
+
+    constexpr static auto serialize(auto & serializer, auto & self)
+    {
+        return serializer.template serialize_one(self.variant, self.id);
+    }
+
+    Variant & variant;
+    Id & id;
+};
+
+template <typename Id, typename Variant>
+constexpr auto known_id(Id && id, Variant && variant)
+{
+    return known_dynamic_id_variant<Id, std::remove_reference_t<Variant>>(
+        variant, id);
 }
 
 template <typename Type>

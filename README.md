@@ -482,6 +482,10 @@ std::variant<v1::person, v2::person> v;
  // Id assumed to be v2::person, and is not serialized / deserialized.
 out(zpp::bits::known_id<"v2::person"_sha256, 4>(v));
 in(zpp::bits::known_id<"v2::person"_sha256, 4>(v));
+
+// When deserializing you can pass the id as function parameter, to be able
+// to use outside of compile time context. `id_v` stands for "id value".
+in(zpp::bits::known_id(zpp::bits::id_v<"v2::person"_sha256, 4>, v));
 ```
 
 * As part of the library implementation it was required to implement some reflection types, for

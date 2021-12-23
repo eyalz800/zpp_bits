@@ -562,4 +562,34 @@ TEST(hash, hash_variant_v2_known)
         },
         v);
 }
+
+TEST(hash, hash_variant_v2_known_dynamic)
+{
+    using namespace hash;
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(zpp::bits::known_id<"v2::person"_sha256, 4>(
+            std::variant<v1::person, v2::person>(
+                v2::person{"Person2", 35, "Basketball"})))
+        .or_throw();
+
+    EXPECT_EQ(hexlify(data),
+              hexlify(zpp::bits::to_bytes<"Person2"_s.size(),
+                                          "Person2"_s,
+                                          35,
+                                          "Basketball"_s.size(),
+                                          "Basketball"_s>()));
+
+    std::variant<v1::person, v2::person> v;
+    in(zpp::bits::known_id(zpp::bits::id_v<"v2::person"_sha256, 4>, v))
+        .or_throw();
+
+    std::visit(
+        [](auto && person) {
+            EXPECT_EQ(person.name, "Person2");
+            EXPECT_EQ(person.age, 35);
+            EXPECT_EQ(person.get_hobby(), "Basketball"sv);
+        },
+        v);
+}
+
 } // namespace test_variant
