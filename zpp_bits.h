@@ -814,21 +814,6 @@ public:
         return serialize_many(items...);
     }
 
-    constexpr auto serialize_many(auto && first_item, auto &&... items)
-    {
-        if (auto result = serialize_one(first_item); failure(result))
-            [[unlikely]] {
-            return result;
-        }
-
-        return serialize_many(items...);
-    }
-
-    constexpr errc serialize_many()
-    {
-        return {};
-    }
-
     constexpr std::size_t position() const
     {
         return m_position;
@@ -845,6 +830,21 @@ public:
     }
 
 protected:
+    constexpr auto serialize_many(auto && first_item, auto &&... items)
+    {
+        if (auto result = serialize_one(first_item); failure(result))
+            [[unlikely]] {
+            return result;
+        }
+
+        return serialize_many(items...);
+    }
+
+    constexpr errc serialize_many()
+    {
+        return {};
+    }
+
     constexpr auto option(out_append)
     {
         static_assert(is_resizable);
@@ -1179,7 +1179,7 @@ public:
 
     constexpr static auto kind()
     {
-        return kind::out;
+        return kind::in;
     }
 
 private:
