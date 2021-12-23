@@ -1027,15 +1027,14 @@ protected:
     template <typename KnownId = void>
     constexpr errc serialize_one(concepts::variant auto && variant)
     {
-        if constexpr (!std::is_void_v<KnownId>) {
-            return std::visit(
-                [this](auto & object) {
-                    return this->serialize_one(object);
-                },
-                variant);
-        } else {
-            using type = std::remove_cvref_t<decltype(variant)>;
+        using type = std::remove_cvref_t<decltype(variant)>;
 
+        if constexpr (!std::is_void_v<KnownId>) {
+            return serialize_one(
+                *std::get_if<
+                    traits::variant<type>::template index<KnownId::value>()>(
+                    std::addressof(variant)));
+        } else {
             auto variant_index = variant.index();
             if (std::variant_npos == variant_index) [[unlikely]] {
                 return std::errc::invalid_argument;
