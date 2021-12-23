@@ -44,58 +44,6 @@ struct person
 Most of the time types we serialize can work with structured binding, and this library takes advantage
 of that, but you need to provide the number of members in your class for this to work using the method above.
 
-* In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and `unevaluated lambda expression`. It means
-that even the number of members can be detected automatically in most cases. To opt-in,
-define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`.
-```cpp
-// Members are detected automatically, no additional change needed.
-struct person
-{
-    std::string name;
-    int age{};
-};
-```
-This works with `clang 13`, however the portability of this is not clear, since in `gcc` it does not work (it is a hard error) and it explicitly states
-in the standard that there is intent not to allow *SFINAE* in similar cases, so it is turned off by default.
-
-* If your data members or default constructor are private, you need to become friend with `zpp::bits::access`
-like so:
-```cpp
-struct private_person
-{
-    // Add this line to your class.
-    friend zpp::bits::access;
-    using serialize = zpp::bits::members<2>;
-
-private:
-    std::string name;
-    int age{};
-};
-```
-
-* To enable save & load of any object, even ones without structured binding, add the following lines to your class
-```cpp
-    constexpr static auto serialize(auto & archive, auto & self)
-    {
-        return archive(self.object_1, self.object_2, ...);
-    }
-```
-Note that `object_1, object_2, ...` are the non-static data members of your class.
-
-* Here is the example of a person class again with explicit serialization function:
-```cpp
-struct person
-{
-    constexpr static auto serialize(auto & archive, auto & self)
-    {
-        return archive(self.name, self.age);
-    }
-
-    std::string name;
-    int age{};
-};
-```
-
 * Example how to serialize the person into and from a vector of bytes:
 ```cpp
 // The `data_in_out` utility function creates a vector of bytes, the input and output archives
@@ -187,6 +135,58 @@ int main()
         return 1;
     });
 }
+```
+
+* In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and `unevaluated lambda expression`. It means
+that even the number of members can be detected automatically in most cases. To opt-in,
+define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`.
+```cpp
+// Members are detected automatically, no additional change needed.
+struct person
+{
+    std::string name;
+    int age{};
+};
+```
+This works with `clang 13`, however the portability of this is not clear, since in `gcc` it does not work (it is a hard error) and it explicitly states
+in the standard that there is intent not to allow *SFINAE* in similar cases, so it is turned off by default.
+
+* If your data members or default constructor are private, you need to become friend with `zpp::bits::access`
+like so:
+```cpp
+struct private_person
+{
+    // Add this line to your class.
+    friend zpp::bits::access;
+    using serialize = zpp::bits::members<2>;
+
+private:
+    std::string name;
+    int age{};
+};
+```
+
+* To enable save & load of any object, even ones without structured binding, add the following lines to your class
+```cpp
+    constexpr static auto serialize(auto & archive, auto & self)
+    {
+        return archive(self.object_1, self.object_2, ...);
+    }
+```
+Note that `object_1, object_2, ...` are the non-static data members of your class.
+
+* Here is the example of a person class again with explicit serialization function:
+```cpp
+struct person
+{
+    constexpr static auto serialize(auto & archive, auto & self)
+    {
+        return archive(self.name, self.age);
+    }
+
+    std::string name;
+    int age{};
+};
 ```
 
 * Constructing input and output archives together and separately from data:
