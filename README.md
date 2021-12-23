@@ -24,7 +24,8 @@ Provide a single, simple header file, that would enable one to:
 * More friendly towards freestanding (no exception runtime support).
 * Breaks compatibility with anything lower than C++20 (which is why the original library is left intact).
 * Better naming for utility classes and namespaces, for instance `zpp::bits` is more easily typed than `zpp::serializer`.
-* For now, dropped support for polymorphic serialization, seeking a more modern way to do it.
+* Modernized polymorphism, based on variant and flexible serialization ids, compared to `zpp::serializer` global
+polymorphic types with fixed 8 bytes of sha1 serialization id.
 
 Contents
 --------
