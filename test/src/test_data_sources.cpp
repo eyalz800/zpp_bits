@@ -95,6 +95,26 @@ TEST(data_sources, stdarray)
     EXPECT_EQ(v, (std::vector{1,2,3,4}));
 }
 
+
+TEST(data_sources, array)
+{
+    std::byte data[128];
+    auto [in, out] = zpp::bits::in_out(data);
+    out(std::vector{1,2,3,4}).or_throw();
+
+    EXPECT_EQ(hexlify(std::span{std::data(data), out.position()}),
+              "04000000"
+              "01000000"
+              "02000000"
+              "03000000"
+              "04000000");
+
+    std::vector<int> v;
+    in(v).or_throw();
+
+    EXPECT_EQ(v, (std::vector{1,2,3,4}));
+}
+
 TEST(data_sources, array_over_span)
 {
     std::byte data[128];

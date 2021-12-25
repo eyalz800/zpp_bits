@@ -1115,6 +1115,9 @@ out(Type &) -> out<Type>;
 template <typename Type>
 out(Type &&) -> out<Type>;
 
+template <typename Type, std::size_t Size>
+out(Type (&)[Size]) -> out<std::span<Type>>;
+
 template <concepts::byte_view ByteView = std::vector<std::byte>>
 class in
 {
@@ -1577,6 +1580,9 @@ private:
     view_type m_data{};
     std::size_t m_position{};
 };
+
+template <typename Type, std::size_t Size>
+in(Type (&)[Size]) -> in<std::span<Type>>;
 
 constexpr auto input(auto && view, auto &&... option)
 {
