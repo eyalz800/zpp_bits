@@ -493,6 +493,37 @@ in(zpp::bits::known_id<"v2::person"_sha256, 4>(v));
 in(zpp::bits::known_id(zpp::bits::id_v<"v2::person"_sha256, 4>, v));
 ```
 
+* You can apply input archive contents to a function directly, using
+`zpp::bits::apply`, the function must be non-template and have exactly
+one overload:
+```cpp
+int foo(std::string s, int i)
+{
+    // s == "hello"s;
+    // i == 1337;
+    return 1338;
+}
+
+auto [data, in, out] = zpp::bits::data_in_out();
+out("hello"s, 1337).or_throw();
+
+// Call the foo in one of the following ways:
+
+// Exception based:
+zpp::bits::apply(foo, in).or_throw() == 1338;
+
+// zpp::throwing based:
+co_await zpp::bits::apply(foo, in) == 1338;
+
+// Return value based:
+if (auto result = zpp::bits::apply(foo, in);
+    failure(result)) {
+    // Failure...
+} else {
+    result.value() == 1338;
+}
+```
+
 * As part of the library implementation it was required to implement some reflection types, for
 counting members and visiting members, and the library exposes these to the user:
 ```cpp

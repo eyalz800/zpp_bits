@@ -1801,6 +1801,191 @@ constexpr auto known_id(Id && id, Variant && variant)
         variant, id);
 }
 
+template <typename Function>
+struct function_traits;
+
+template <typename Return, typename... Arguments>
+struct function_traits<Return(*)(Arguments...)>
+{
+    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using return_type = Return;
+};
+
+template <typename This, typename Return, typename... Arguments>
+struct function_traits<Return(This::*)(Arguments...)>
+{
+    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using return_type = Return;
+};
+
+template <typename This, typename Return, typename... Arguments>
+struct function_traits<Return(This::*)(Arguments...) noexcept>
+{
+    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using return_type = Return;
+};
+
+template <typename This, typename Return, typename... Arguments>
+struct function_traits<Return(This::*)(Arguments...) const>
+{
+    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using return_type = Return;
+};
+
+template <typename This, typename Return, typename... Arguments>
+struct function_traits<Return(This::*)(Arguments...) const noexcept>
+{
+    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using return_type = Return;
+};
+
+template <typename Function>
+using function_parameters_t =
+    typename function_traits<std::remove_cvref_t<Function>>::parameters_tuple_type;
+
+template <typename Function>
+using function_return_type_t =
+    typename function_traits<std::remove_cvref_t<Function>>::return_type;
+
+constexpr auto success(auto && value_or_errc) requires
+    std::same_as<decltype(value_or_errc.error()), errc>
+{
+    return value_or_errc.has_value();
+}
+
+constexpr auto failure(auto && value_or_errc) requires
+    std::same_as<decltype(value_or_errc.error()), errc>
+{
+    return value_or_errc.has_error();
+}
+
+template <typename Type>
+struct [[nodiscard]] value_or_errc
+{
+    constexpr value_or_errc(errc error) : variant(error)
+    {
+    }
+
+    constexpr value_or_errc(auto && value) :
+        variant(std::forward<decltype(value)>(value))
+    {
+    }
+
+    constexpr auto error() const
+    {
+        return std::get<errc>(variant);
+    }
+
+    constexpr decltype(auto) value()
+    {
+        return std::get<Type>(variant);
+    }
+
+    constexpr decltype(auto) value() const
+    {
+        return std::get<Type>(variant);
+    }
+
+    constexpr auto has_error() const
+    {
+        return variant.index() == 1;
+    }
+
+    constexpr auto has_value() const
+    {
+        return variant.index() == 0;
+    }
+
+#if __has_include("zpp_throwing.h")
+    constexpr zpp::throwing<Type> operator co_await() &&
+    {
+        if (failure(*this)) [[unlikely]] {
+            return error().code;
+        }
+        return std::move(value());
+    }
+
+    constexpr zpp::throwing<Type> operator co_await() const &
+    {
+        if (failure(*this)) [[unlikely]] {
+            return error().code;
+        }
+        return value();
+    }
+#endif
+
+#ifdef __cpp_exceptions
+    constexpr decltype(auto) or_throw() const
+    {
+        if (failure(*this)) [[unlikely]] {
+            throw std::system_error(std::make_error_code(error().code));
+        }
+        return value();
+    }
+#endif
+
+    std::variant<Type, errc> variant;
+};
+
+constexpr auto apply(auto && function, auto & archive) requires(
+    std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
+{
+    using function_type = std::decay_t<decltype(function)>;
+
+    if constexpr (requires { &function_type::operator(); }) {
+        using parameters_type =
+            function_parameters_t<decltype(&function_type::operator())>;
+        using return_type =
+            function_return_type_t<decltype(&function_type::operator())>;
+        parameters_type parameters;
+        if (auto result = archive(parameters); failure(result)) {
+            return value_or_errc<return_type>{result};
+        }
+        return value_or_errc<return_type>{
+            std::apply(std::forward<decltype(function)>(function),
+                       std::move(parameters))};
+    } else {
+        using parameters_type = function_parameters_t<function_type>;
+        using return_type = function_return_type_t<function_type>;
+        parameters_type parameters;
+        if (auto result = archive(parameters); failure(result)) {
+            return value_or_errc<return_type>{result};
+        }
+        return value_or_errc<return_type>{
+            std::apply(std::forward<decltype(function)>(function),
+                       std::move(parameters))};
+    }
+}
+
+constexpr auto
+apply(auto && self, auto && function, auto & archive) requires(
+    std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
+{
+    using parameters_type = function_parameters_t<
+        std::remove_cvref_t<decltype(function)>>;
+    using return_type = function_return_type_t<
+        std::remove_cvref_t<decltype(function)>>;
+    parameters_type parameters;
+    if (auto result = archive(parameters); failure(result)) {
+        return value_or_errc<return_type>{result};
+    }
+    return value_or_errc<return_type>(std::apply(
+        [&](auto &&... arguments) -> decltype(auto) {
+// Ignore GCC issue.
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
+            return (std::forward<decltype(self)>(self).*
+                     std::forward<decltype(function)>(function))(
+                std::forward<decltype(arguments)>(arguments)...);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
+        },
+        std::move(parameters)));
+}
+
 template <typename Type>
 struct big_endian
 {
