@@ -11,6 +11,21 @@ int test_function_normal(std::string s, int i)
     return 1338;
 }
 
+void test_function_void(std::string s, int i)
+{
+    EXPECT_EQ(s, "hello"s);
+    EXPECT_EQ(i, 1337);
+}
+
+int test_function_no_parameters()
+{
+    return 1338;
+}
+
+void test_function_void_no_parameters()
+{
+}
+
 std::unique_ptr<int> test_function_return_move(std::string s, int i)
 {
     EXPECT_EQ(s, "hello"s);
@@ -32,12 +47,16 @@ struct a
         return 1339;
     }
 
+    void test_member_function_void(std::string s, int i)
+    {
+        return test_function_void(std::move(s), i);
+    }
+
     int test_member_move_only(std::unique_ptr<int> p)
     {
         test_function_move_only(std::move(p));
         return 1339;
     }
-
 };
 
 TEST(test_function, normal_function)
@@ -72,6 +91,36 @@ TEST(test_function, function_return_move)
         1338);
 }
 
+TEST(test_function, function_void)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out("hello"s, 1337).or_throw();
+
+    zpp::bits::apply(test_function_return_move, in).or_throw();
+
+    out("hello"s, 1337).or_throw();
+    int j = 0;
+    zpp::bits::apply([&](std::string, int){ j = 1; }, in).or_throw();
+    EXPECT_EQ(j, 1);
+}
+
+TEST(test_function, function_no_parameters)
+{
+    auto [data, in] = zpp::bits::data_in();
+    EXPECT_EQ(zpp::bits::apply(test_function_no_parameters, in), 1338);
+}
+
+TEST(test_function, function_void_no_parameters)
+{
+    auto [data, in] = zpp::bits::data_in();
+    zpp::bits::apply(test_function_void_no_parameters, in);
+
+    int i = 0;
+    zpp::bits::apply([&] { i = 1; }, in);
+
+    EXPECT_EQ(i, 1);
+}
+
 TEST(test_function, member_function)
 {
     auto [data, in, out] = zpp::bits::data_in_out();
@@ -102,6 +151,15 @@ TEST(test_function, member_move_only)
     EXPECT_EQ(
         (zpp::bits::apply(a1, &a::test_member_move_only, in).or_throw()),
         1339);
+}
+
+TEST(test_function, member_function_void)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out("hello"s, 1337).or_throw();
+
+    a a1;
+    zpp::bits::apply(a1, &a::test_member_function_void, in).or_throw();
 }
 
 TEST(test_function, lambda)

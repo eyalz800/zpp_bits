@@ -523,6 +523,9 @@ if (auto result = zpp::bits::apply(foo, in);
     result.value() == 1338;
 }
 ```
+When your function receives no parameters, the effect is just calling the function
+without deserialization and the return value is the return value of your function.
+When the function returns void, there is no value for the resulting type.
 
 * As part of the library implementation it was required to implement some reflection types, for
 counting members and visiting members, and the library exposes these to the user:
