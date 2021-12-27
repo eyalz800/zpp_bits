@@ -1807,41 +1807,90 @@ struct function_traits;
 template <typename Return, typename... Arguments>
 struct function_traits<Return(*)(Arguments...)>
 {
-    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using parameters_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using return_type = Return;
+};
+
+template <typename Return, typename... Arguments>
+struct function_traits<Return(*)(Arguments...) noexcept>
+{
+    using parameters_type = std::tuple<std::remove_cvref_t<Arguments>...>;
     using return_type = Return;
 };
 
 template <typename This, typename Return, typename... Arguments>
 struct function_traits<Return(This::*)(Arguments...)>
 {
-    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using parameters_type = std::tuple<std::remove_cvref_t<Arguments>...>;
     using return_type = Return;
 };
 
 template <typename This, typename Return, typename... Arguments>
 struct function_traits<Return(This::*)(Arguments...) noexcept>
 {
-    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using parameters_type = std::tuple<std::remove_cvref_t<Arguments>...>;
     using return_type = Return;
 };
 
 template <typename This, typename Return, typename... Arguments>
 struct function_traits<Return(This::*)(Arguments...) const>
 {
-    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using parameters_type = std::tuple<std::remove_cvref_t<Arguments>...>;
     using return_type = Return;
 };
 
 template <typename This, typename Return, typename... Arguments>
 struct function_traits<Return(This::*)(Arguments...) const noexcept>
 {
-    using parameters_tuple_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using parameters_type = std::tuple<std::remove_cvref_t<Arguments>...>;
+    using return_type = Return;
+};
+
+template <typename Return>
+struct function_traits<Return(*)()>
+{
+    using parameters_type = void;
+    using return_type = Return;
+};
+
+template <typename Return>
+struct function_traits<Return(*)() noexcept>
+{
+    using parameters_type = void;
+    using return_type = Return;
+};
+
+template <typename This, typename Return>
+struct function_traits<Return(This::*)()>
+{
+    using parameters_type = void;
+    using return_type = Return;
+};
+
+template <typename This, typename Return>
+struct function_traits<Return(This::*)() noexcept>
+{
+    using parameters_type = void;
+    using return_type = Return;
+};
+
+template <typename This, typename Return>
+struct function_traits<Return(This::*)() const>
+{
+    using parameters_type = void;
+    using return_type = Return;
+};
+
+template <typename This, typename Return>
+struct function_traits<Return(This::*)() const noexcept>
+{
+    using parameters_type = void;
     using return_type = Return;
 };
 
 template <typename Function>
 using function_parameters_t =
-    typename function_traits<std::remove_cvref_t<Function>>::parameters_tuple_type;
+    typename function_traits<std::remove_cvref_t<Function>>::parameters_type;
 
 template <typename Function>
 using function_return_type_t =
@@ -1937,23 +1986,49 @@ constexpr auto apply(auto && function, auto && archive) requires(
             function_parameters_t<decltype(&function_type::operator())>;
         using return_type =
             function_return_type_t<decltype(&function_type::operator())>;
-        parameters_type parameters;
-        if (auto result = archive(parameters); failure(result)) {
-            return value_or_errc<return_type>{result};
+        if constexpr (std::is_void_v<parameters_type>) {
+            return std::forward<decltype(function)>(function)();
+        } else {
+            parameters_type parameters;
+            if constexpr (std::is_void_v<return_type>) {
+                if (auto result = archive(parameters); failure(result)) {
+                    return result;
+                }
+                std::apply(std::forward<decltype(function)>(function),
+                           std::move(parameters));
+                return errc{};
+            } else {
+                if (auto result = archive(parameters); failure(result)) {
+                    return value_or_errc<return_type>{result};
+                }
+                return value_or_errc<return_type>{
+                    std::apply(std::forward<decltype(function)>(function),
+                               std::move(parameters))};
+            }
         }
-        return value_or_errc<return_type>{
-            std::apply(std::forward<decltype(function)>(function),
-                       std::move(parameters))};
     } else {
         using parameters_type = function_parameters_t<function_type>;
         using return_type = function_return_type_t<function_type>;
-        parameters_type parameters;
-        if (auto result = archive(parameters); failure(result)) {
-            return value_or_errc<return_type>{result};
+        if constexpr (std::is_void_v<parameters_type>) {
+            return std::forward<decltype(function)>(function)();
+        } else {
+            parameters_type parameters;
+            if constexpr (std::is_void_v<return_type>) {
+                if (auto result = archive(parameters); failure(result)) {
+                    return result;
+                }
+                std::apply(std::forward<decltype(function)>(function),
+                           std::move(parameters));
+                return errc{};
+            } else {
+                if (auto result = archive(parameters); failure(result)) {
+                    return value_or_errc<return_type>{result};
+                }
+                return value_or_errc<return_type>{
+                    std::apply(std::forward<decltype(function)>(function),
+                               std::move(parameters))};
+            }
         }
-        return value_or_errc<return_type>{
-            std::apply(std::forward<decltype(function)>(function),
-                       std::move(parameters))};
     }
 }
 
@@ -1965,25 +2040,52 @@ apply(auto && self, auto && function, auto && archive) requires(
         std::remove_cvref_t<decltype(function)>>;
     using return_type = function_return_type_t<
         std::remove_cvref_t<decltype(function)>>;
-    parameters_type parameters;
-    if (auto result = archive(parameters); failure(result)) {
-        return value_or_errc<return_type>{result};
-    }
-    return value_or_errc<return_type>(std::apply(
-        [&](auto &&... arguments) -> decltype(auto) {
-// Ignore GCC issue.
+    if constexpr (std::is_void_v<parameters_type>) {
+        return (std::forward<decltype(self)>(self).*
+                std::forward<decltype(function)>(function))();
+    } else {
+        parameters_type parameters;
+        if constexpr (std::is_void_v<return_type>) {
+            if (auto result = archive(parameters); failure(result)) {
+                return result;
+            }
+            // Ignore GCC issue.
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
-            return (std::forward<decltype(self)>(self).*
-                     std::forward<decltype(function)>(function))(
-                std::forward<decltype(arguments)>(arguments)...);
+            std::apply(
+                [&](auto &&... arguments) -> decltype(auto) {
+                    return (std::forward<decltype(self)>(self).*
+                            std::forward<decltype(function)>(function))(
+                        std::forward<decltype(arguments)>(arguments)...);
+                },
+                std::move(parameters));
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
-        },
-        std::move(parameters)));
+            return errc{};
+        } else {
+            if (auto result = archive(parameters); failure(result)) {
+                return value_or_errc<return_type>{result};
+            }
+            return value_or_errc<return_type>(std::apply(
+                [&](auto &&... arguments) -> decltype(auto) {
+            // Ignore GCC issue.
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
+                    return (std::forward<decltype(self)>(self).*
+                            std::forward<decltype(function)>(function))(
+                        std::forward<decltype(arguments)>(arguments)...);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
+                },
+                std::move(parameters)));
+        }
+    }
 }
 
 template <typename Type>
