@@ -1899,69 +1899,120 @@ using function_return_type_t =
 constexpr auto success(auto && value_or_errc) requires
     std::same_as<decltype(value_or_errc.error()), errc>
 {
-    return value_or_errc.has_value();
+    return value_or_errc.success();
 }
 
 constexpr auto failure(auto && value_or_errc) requires
     std::same_as<decltype(value_or_errc.error()), errc>
 {
-    return value_or_errc.has_error();
+    return value_or_errc.failure();
 }
 
 template <typename Type>
 struct [[nodiscard]] value_or_errc
 {
-    constexpr value_or_errc(errc error) : variant(error)
+    using error_type = errc;
+    using value_type = std::conditional_t<
+        std::is_void_v<Type>,
+        std::nullptr_t,
+        std::conditional_t<
+            std::is_reference_v<Type>,
+            std::add_pointer_t<std::remove_reference_t<Type>>,
+            Type>>;
+
+    constexpr value_or_errc() = default;
+
+    constexpr explicit value_or_errc(auto && value) :
+        m_return_value(std::forward<decltype(value)>(value))
     {
     }
 
-    constexpr value_or_errc(auto && value) :
-        variant(std::forward<decltype(value)>(value))
+    constexpr explicit value_or_errc(error_type error) :
+        m_error(std::forward<decltype(error)>(error))
     {
     }
 
-    constexpr value_or_errc(value_or_errc && value) noexcept :
-        variant(std::move(value))
+    constexpr value_or_errc(value_or_errc && other) noexcept
     {
+        if (other.is_value()) {
+            if constexpr (!std::is_void_v<Type>) {
+                if constexpr (!std::is_reference_v<Type>) {
+                    ::new (std::addressof(m_return_value))
+                        Type(std::move(other.m_return_value));
+                } else {
+                    m_return_value = other.m_return_value;
+                }
+            }
+        } else {
+            m_failure = other.m_failure;
+            std::memcpy(&m_error, &other.m_error, sizeof(m_error));
+        }
     }
 
-    constexpr auto error() const
+    constexpr ~value_or_errc()
     {
-        return std::get<errc>(variant);
+        if constexpr (!std::is_void_v<Type> &&
+                      !std::is_trivially_destructible_v<Type>) {
+            if (success()) {
+                m_return_value.~Type();
+            }
+        }
     }
 
-    constexpr decltype(auto) value()
+    constexpr bool success() const noexcept
     {
-        return std::get<Type>(variant);
+        return !m_failure;
     }
 
-    constexpr decltype(auto) value() const
+    constexpr bool failure() const noexcept
     {
-        return std::get<Type>(variant);
+        return m_failure;
     }
 
-    constexpr auto has_error() const
+    constexpr decltype(auto) value() & noexcept
     {
-        return variant.index() == 1;
+        if constexpr (std::is_same_v<Type, decltype(m_return_value)>) {
+            return (m_return_value);
+        } else {
+            return (*m_return_value);
+        }
     }
 
-    constexpr auto has_value() const
+    constexpr decltype(auto) value() && noexcept
     {
-        return variant.index() == 0;
+        if constexpr (std::is_same_v<Type, decltype(m_return_value)>) {
+            return std::forward<Type>(m_return_value);
+        } else {
+            return std::forward<Type>(*m_return_value);
+        }
     }
 
-#if __has_include("zpp_throwing.h")
+    constexpr decltype(auto) value() const & noexcept
+    {
+        if constexpr (std::is_same_v<Type, decltype(m_return_value)>) {
+            return (m_return_value);
+        } else {
+            return (*m_return_value);
+        }
+    }
+
+    constexpr auto error() const noexcept
+    {
+        return m_error;
+    }
+
+    #if __has_include("zpp_throwing.h")
     constexpr zpp::throwing<Type> operator co_await() &&
     {
-        if (failure(*this)) [[unlikely]] {
+        if (failure()) [[unlikely]] {
             return error().code;
         }
-        return std::move(value());
+        return std::move(*this).value();
     }
 
     constexpr zpp::throwing<Type> operator co_await() const &
     {
-        if (failure(*this)) [[unlikely]] {
+        if (failure()) [[unlikely]] {
             return error().code;
         }
         return value();
@@ -1969,16 +2020,37 @@ struct [[nodiscard]] value_or_errc
 #endif
 
 #ifdef __cpp_exceptions
-    constexpr decltype(auto) or_throw() const
+    constexpr decltype(auto) or_throw() &
     {
-        if (failure(*this)) [[unlikely]] {
+        if (failure()) [[unlikely]] {
+            throw std::system_error(std::make_error_code(error().code));
+        }
+        return value();
+    }
+
+    constexpr decltype(auto) or_throw() &&
+    {
+        if (failure()) [[unlikely]] {
+            throw std::system_error(std::make_error_code(error().code));
+        }
+        return std::move(*this).value();
+    }
+
+    constexpr decltype(auto) or_throw() const &
+    {
+        if (failure()) [[unlikely]] {
             throw std::system_error(std::make_error_code(error().code));
         }
         return value();
     }
 #endif
 
-    std::variant<Type, errc> variant;
+    union
+    {
+        error_type m_error{};
+        value_type m_return_value;
+    };
+    bool m_failure{};
 };
 
 constexpr auto apply(auto && function, auto && archive) requires(
