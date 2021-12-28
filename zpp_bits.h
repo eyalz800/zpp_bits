@@ -1298,6 +1298,8 @@ private:
     {
         using type = std::remove_cvref_t<decltype(container)>;
         using value_type = typename type::value_type;
+        constexpr auto is_const = std::is_const_v<
+            std::remove_reference_t<decltype(container[0])>>;
 
         if constexpr (!std::is_void_v<SizeType> &&
                       (
@@ -1315,11 +1317,20 @@ private:
                               container.resize(size);
                           }) {
                 container.resize(size);
+            } else if constexpr (is_const &&
+                                 (std::same_as<std::byte, value_type> ||
+                                  std::same_as<char, value_type> ||
+                                  std::same_as<unsigned char,
+                                               value_type>)) {
+                if (size > m_data.size() - m_position) [[unlikely]] {
+                    return std::errc::value_too_large;
+                }
+                container = {m_data.data() + m_position, size};
+                m_position += size;
             } else {
                 if (size > container.size()) [[unlikely]] {
                     return std::errc::value_too_large;
                 }
-
                 container = {container.data(), size};
             }
         }
@@ -1331,7 +1342,23 @@ private:
                                             typename type::iterator>::
                                             iterator_category> &&
                       requires { container.data(); }) {
-            return serialize_one(bytes(container));
+            if constexpr (is_const &&
+                          (std::same_as<std::byte, value_type> ||
+                           std::same_as<char, value_type> ||
+                           std::same_as<
+                               unsigned char,
+                               value_type>)&&requires(type container) {
+                              container = {m_data.data(), 1};
+                          }) {
+                if constexpr (std::is_void_v<SizeType>) {
+                    auto size = m_data.size();
+                    container = {m_data.data() + m_position, size - m_position};
+                    m_position = size;
+                }
+                return {};
+            } else {
+                return serialize_one(bytes(container));
+            }
         } else {
             for (auto & item : container) {
                 if (auto result = serialize_one(item); failure(result))
