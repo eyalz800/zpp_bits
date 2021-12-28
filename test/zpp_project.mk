@@ -19,7 +19,7 @@ ZPP_FLAGS := \
 	-DZPP_BITS_AUTODETECT_MEMBERS_MODE=$(ZPP_BITS_AUTODETECT_MEMBERS_MODE)
 ZPP_FLAGS_DEBUG := -g -fsanitize=address -O2
 ZPP_FLAGS_RELEASE := \
-	-O2 -ffunction-sections \
+	-O2 -DNDEBUG -ffunction-sections \
 	-fdata-sections -fvisibility=hidden
 ZPP_CFLAGS := $(ZPP_FLAGS) -std=c11
 ZPP_CFLAGS_DEBUG := $(ZPP_FLAGS_DEBUG)
