@@ -220,8 +220,7 @@ TEST(test_function, throwing_function_return_move)
         EXPECT_EQ(
             *(co_await zpp::bits::apply(test_function_return_move, in)),
             1338);
-    },
-    []() {
+    }, []() {
         FAIL();
     });
 }
