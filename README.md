@@ -630,6 +630,37 @@ server.serve().or_throw();
 client.response<"a::foo"_sha256_int>().or_throw(); // == a1.foo(1337, "hello"s);
 ```
 
+* On the receiving end (input archive), the library supports view types of const byte types, such
+as `std::span<const std::byte>` in order to get a view at a portion of data without copying.
+This needs to be carefully used because invalidating iterators of the contained data could cause
+a use after free. It is provided to allow the optimization when needed:
+```cpp
+using namespace std::literals;
+
+auto [data, in, out] = zpp::bits::data_in_out();
+out("hello"sv).or_throw();
+
+std::span<const std::byte> s;
+in(s).or_throw();
+
+// s.size() == "hello"sv.size()
+// std::memcmp("hello"sv.data(), s.data(), "hello"sv.size()) == 0
+}
+```
+
+There is also an unsized version, which consumes the rest of the archive data
+to allow the common use case of header then arbitrary amount of data:
+```cpp
+auto [data, in, out] = zpp::bits::data_in_out();
+out(zpp::bits::unsized("hello"sv)).or_throw();
+
+std::span<const std::byte> s;
+in(zpp::bits::unsized(s)).or_throw();
+
+// s.size() == "hello"sv.size()
+// std::memcmp("hello"sv.data(), s.data(), "hello"sv.size()) == 0
+```
+
 * As part of the library implementation it was required to implement some reflection types, for
 counting members and visiting members, and the library exposes these to the user:
 ```cpp
