@@ -468,7 +468,10 @@ auto serialize_id(const person &) -> zpp::bits::id<"v1::person"_sha256>; // Sha2
 You can also serialize just the first bytes of the hash, like so:
 ```cpp
 // First 4 bytes of hash:
-using serialize_id = zpp::bits::id<"v1::person"_sha256, 4>; // First 4 bytes of sha256
+using serialize_id = zpp::bits::id<"v1::person"_sha256, 4>;
+
+// First sizeof(int) bytes of hash:
+using serialize_id = zpp::bits::id<"v1::person"_sha256_int>;
 ```
 
 The type is then converted to bytes at compile time using (... wait for it) `zpp::bits::out`
@@ -526,6 +529,96 @@ if (auto result = zpp::bits::apply(foo, in);
 When your function receives no parameters, the effect is just calling the function
 without deserialization and the return value is the return value of your function.
 When the function returns void, there is no value for the resulting type.
+
+* The library also provides a thin RPC (remote procedure call) interface to allow serializing
+and deserializing function calls:
+```cpp
+using namespace std::literals;
+using namespace zpp::bits::literals;
+
+int foo(int i, std::string s);
+std::string bar(int i, int j);
+
+using rpc = zpp::bits::rpc<
+    zpp::bits::bind<foo, "foo"_sha256_int>,
+    zpp::bits::bind<bar, "bar"_sha256_int>
+>;
+
+auto [data, in, out] = zpp::bits::data_in_out();
+
+// Server and client together:
+auto [client, server] = rpc::client_server(in, out);
+
+// Or separately:
+rpc::client client{in, out};
+rpc::client server{in, out};
+
+// Request from the client:
+client.request<"foo"_sha256_int>(1337, "hello"s).or_throw();
+
+// Serve the request from the server:
+server.serve().or_throw();
+
+// Read back the response
+client.response<"foo"_sha256_id>().or_throw(); // == foo(1337, "hello"s);
+```
+
+Regarding error handling, similar to many examples above you can use return value, exceptions,
+or `zpp::throwing` way for handling errors.
+```cpp
+// Return value based.
+if (auto result = client.request<"foo"_sha256_int>(1337, "hello"s); failure(result)) {
+    // Handle the failure.
+}
+if (auto result = server.serve(); failure(result)) {
+    // Handle the failure.
+}
+if (auto result = client.response<"foo"_sha256_int>(); failure(result)) {
+    // Handle the failure.
+} else {
+    // Use response.value();
+}
+
+// Throwing based.
+co_await client.request<"foo"_sha256_int>(1337, "hello"s); failure(result));
+co_await server.serve();
+co_await client.response<"foo"_sha256_int>(); // == foo(1337, "hello"s);
+```
+
+It's possible for the IDs of the RPC calls to be skipped, for example of they
+are passed out of band, here is how to achieve this:
+```cpp
+server.serve(id); // id is already known, don't deserialize it.
+client.request_body<Id>(arguments...); // request without serializing id.
+```
+
+Member functions can also be registered for RPC, however the server needs
+to get a reference to the class object during construction, and all of the member
+functions must belong to the same class (though namespace scope functions are ok to mix):
+```cpp
+struct a
+{
+    int foo(int i, std::string s);
+};
+
+using rpc = zpp::bits::rpc<
+    zpp::bits::bind<&a::foo, "foo"_sha256_int>,
+    zpp::bits::bind<bar, "bar"_sha256_int>
+>;
+
+auto [data, in, out] = zpp::bits::data_in_out();
+
+
+// Our object.
+a a1;
+
+// Server and client together:
+auto [client, server] = rpc::client_server(in, out, a1);
+
+// Or separately:
+rpc::client client{in, out};
+rpc::client server{in, out, a1};
+```
 
 * As part of the library implementation it was required to implement some reflection types, for
 counting members and visiting members, and the library exposes these to the user:

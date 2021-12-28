@@ -1920,6 +1920,11 @@ struct [[nodiscard]] value_or_errc
     {
     }
 
+    constexpr value_or_errc(value_or_errc && value) noexcept :
+        variant(std::move(value))
+    {
+    }
+
     constexpr auto error() const
     {
         return std::get<errc>(variant);
@@ -2050,7 +2055,7 @@ apply(auto && self, auto && function, auto && archive) requires(
                 return result;
             }
             // Ignore GCC issue.
-#ifdef __GNUC__
+#if defined __GNUC__ && !defined __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
@@ -2061,7 +2066,7 @@ apply(auto && self, auto && function, auto && archive) requires(
                         std::forward<decltype(arguments)>(arguments)...);
                 },
                 std::move(parameters));
-#ifdef __GNUC__
+#if defined __GNUC__ && !defined __clang__
 #pragma GCC diagnostic pop
 #endif
             return errc{};
@@ -2072,14 +2077,14 @@ apply(auto && self, auto && function, auto && archive) requires(
             return value_or_errc<return_type>(std::apply(
                 [&](auto &&... arguments) -> decltype(auto) {
             // Ignore GCC issue.
-#ifdef __GNUC__
+#if defined __GNUC__ && !defined __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
                     return (std::forward<decltype(self)>(self).*
                             std::forward<decltype(function)>(function))(
                         std::forward<decltype(arguments)>(arguments)...);
-#ifdef __GNUC__
+#if defined __GNUC__ && !defined __clang__
 #pragma GCC diagnostic pop
 #endif
                 },
@@ -2087,6 +2092,360 @@ apply(auto && self, auto && function, auto && archive) requires(
         }
     }
 }
+
+template <auto Function, auto Id, auto MaxSize = -1>
+struct bind
+{
+    using id = zpp::bits::id<Id, MaxSize>;
+    using function_type = decltype(Function);
+    using parameters_type =
+        typename function_traits<function_type>::parameters_type;
+    using return_type =
+        typename function_traits<function_type>::return_type;
+
+    constexpr static decltype(auto) call(auto && archive, auto && self)
+    {
+        if constexpr (std::is_member_function_pointer_v<
+                          std::remove_cvref_t<decltype(Function)>>) {
+            return apply(self, Function, archive);
+        } else {
+            return apply(Function, archive);
+        }
+    }
+};
+
+template <typename... Bindings>
+struct rpc_impl
+{
+    using id = std::remove_cvref_t<
+        decltype(std::remove_cvref_t<decltype(get<0>(
+                     std::tuple<Bindings...>{}))>::id::value)>;
+
+    template <typename In, typename Out>
+    struct client
+    {
+        constexpr client(In && in, Out && out) :
+            in(in),
+            out(out)
+        {
+        }
+
+        constexpr client(client && other) = default;
+
+        constexpr ~client()
+        {
+            static_assert(std::remove_cvref_t<decltype(in)>::kind() == kind::in);
+            static_assert(std::remove_cvref_t<decltype(out)>::kind() == kind::out);
+        }
+
+        template <typename Id, typename FirstBinding, typename... OtherBindings>
+        constexpr auto binding()
+        {
+            if constexpr (std::same_as<Id, typename FirstBinding::id>) {
+                return FirstBinding{};
+            } else {
+                static_assert(sizeof...(OtherBindings));
+                return binding<Id, OtherBindings...>();
+            }
+        }
+
+        template <typename Id>
+        constexpr auto request(auto &&... arguments)
+        {
+            using request_binding = decltype(binding<Id, Bindings...>());
+            using parameters_type =
+                typename request_binding::parameters_type;
+
+            if constexpr (std::is_void_v<parameters_type>) {
+                static_assert(!sizeof...(arguments));
+            } else {
+                static_assert(std::same_as<std::tuple<std::remove_cvref_t<
+                                               decltype(arguments)>...>,
+                                           parameters_type>);
+            }
+
+            return out(Id::value, arguments...);
+        }
+
+        template <auto Id, auto MaxSize = -1>
+        constexpr auto request(auto &&... arguments)
+        {
+            return request<zpp::bits::id<Id, MaxSize>>(arguments...);
+        }
+
+        template <typename Id>
+        constexpr auto request_body(auto &&... arguments)
+        {
+            using request_binding = decltype(binding<Id, Bindings...>());
+            using parameters_type =
+                typename request_binding::parameters_type;
+
+            if constexpr (std::is_void_v<parameters_type>) {
+                static_assert(!sizeof...(arguments));
+            } else {
+                static_assert(std::same_as<std::tuple<std::remove_cvref_t<
+                                               decltype(arguments)>...>,
+                                           parameters_type>);
+            }
+
+            return out(arguments...);
+        }
+
+        template <auto Id, auto MaxSize = -1>
+        constexpr auto request_body(auto &&... arguments)
+        {
+            return request_body<zpp::bits::id<Id, MaxSize>>(arguments...);
+        }
+
+        template <typename Id>
+        constexpr auto response()
+        {
+            using request_binding = decltype(binding<Id, Bindings...>());
+            using return_type = typename request_binding::return_type;
+
+            if constexpr (std::is_void_v<return_type>) {
+                return;
+#if __has_include("zpp_throwing.h")
+            } else if constexpr (requires(return_type && value) {
+                                     value.await_ready();
+                                 }) {
+                using nested_return = std::remove_cvref_t<
+                    decltype(std::declval<return_type>().await_resume())>;
+                if constexpr (std::is_void_v<nested_return>) {
+                    return;
+                } else {
+                    nested_return return_value;
+                    if (auto result = in(return_value); failure(result)) {
+                        return value_or_errc<nested_return>{result};
+                    }
+                    return value_or_errc<nested_return>{return_value};
+                }
+#endif
+            } else {
+                return_type return_value;
+                if (auto result = in(return_value); failure(result)) {
+                    return value_or_errc<return_type>{result};
+                }
+                return value_or_errc<return_type>{return_value};
+            }
+        }
+
+        template <auto Id, auto MaxSize = -1>
+        constexpr auto response()
+        {
+            return response<zpp::bits::id<Id, MaxSize>>();
+        }
+
+        In & in;
+        Out & out;
+    };
+
+#if defined __clang__ || !defined __GNUC__ || __GNUC__ >= 12 // GCC issue
+    template <typename... Types>
+    client(Types && ...) -> client<Types&&...>;
+#endif
+
+    template <typename In, typename Out, typename Context = std::monostate>
+    struct server
+    {
+        constexpr server(In && in, Out && out) :
+            in(in),
+            out(out)
+        {
+        }
+
+        constexpr server(In && in, Out && out, Context && context) :
+            in(in),
+            out(out),
+            context(context)
+        {
+        }
+
+        constexpr server(server && other) = default;
+
+        constexpr ~server()
+        {
+            static_assert(std::remove_cvref_t<decltype(in)>::kind() == kind::in);
+            static_assert(std::remove_cvref_t<decltype(out)>::kind() == kind::out);
+        }
+
+        template <typename FirstBinding, typename... OtherBindings>
+        constexpr auto call_binding(auto & id)
+        {
+            if (FirstBinding::id::value == id) {
+                if constexpr (std::is_void_v<decltype(FirstBinding::call(
+                                  in, context))>) {
+                    FirstBinding::call(in, context);
+                    return errc{};
+                } else if constexpr (std::same_as<
+                                         decltype(FirstBinding::call(
+                                             in, context)),
+                                         errc>) {
+                    if (auto result = FirstBinding::call(in, context);
+                        failure(result)) {
+                        return result;
+                    }
+                    return errc{};
+                } else if constexpr (std::is_void_v<typename FirstBinding::
+                                                        parameters_type>) {
+                    return out(FirstBinding::call(in, context));
+                } else {
+                    if (auto result = FirstBinding::call(in, context);
+                        failure(result)) {
+                        return result.error();
+                    } else {
+                        return out(result.value());
+                    }
+                }
+            } else {
+                if constexpr (!sizeof...(OtherBindings)) {
+                    return errc{std::errc::not_supported};
+                } else {
+                    return call_binding<OtherBindings...>(id);
+                }
+            }
+        }
+
+#if __has_include("zpp_throwing.h")
+        template <typename FirstBinding, typename... OtherBindings>
+        zpp::throwing<void> call_binding_throwing(auto & id)
+        {
+            if (FirstBinding::id::value == id) {
+                if constexpr (std::is_void_v<decltype(FirstBinding::call(
+                                  in, context))>) {
+                    FirstBinding::call(in, context);
+                    co_return;
+                } else if constexpr (std::same_as<
+                                         decltype(FirstBinding::call(
+                                             in, context)),
+                                         errc>) {
+                    if (auto result = FirstBinding::call(in, context);
+                        failure(result)) {
+                        co_yield result.code;
+                    }
+                    co_return;
+                } else if constexpr (std::is_void_v<typename FirstBinding::
+                                                        parameters_type>) {
+                    if constexpr (requires {
+                                      FirstBinding::call(in, context)
+                                          .await_ready();
+                                  }) {
+                        if constexpr (std::is_void_v<
+                                          decltype(FirstBinding::call(
+                                                       in, context)
+                                                       .await_resume())>) {
+                            co_await FirstBinding::call(in, context);
+                        } else {
+                            co_await out(
+                                co_await FirstBinding::call(in, context));
+                        }
+                    } else {
+                        co_await out(FirstBinding::call(in, context));
+                    }
+                } else {
+                    if (auto result = FirstBinding::call(in, context);
+                        failure(result)) {
+                        co_yield result.error().code;
+                    } else if constexpr (requires {
+                                             result.value().await_ready();
+                                         }) {
+                        if constexpr (!std::is_void_v<
+                                          decltype(result.value()
+                                                       .await_resume())>) {
+                            co_await out(co_await result.value());
+                        }
+                        co_return;
+                    } else {
+                        co_await out(result.value());
+                    }
+                }
+            } else {
+                if constexpr (!sizeof...(OtherBindings)) {
+                    co_yield std::errc::not_supported;
+                } else {
+                    co_return co_await call_binding_throwing<
+                        OtherBindings...>(id);
+                }
+            }
+        }
+#endif
+
+        constexpr auto serve(auto && id)
+        {
+#if __has_include("zpp_throwing.h")
+            if constexpr ((... || requires {
+                              std::declval<
+                                  typename Bindings::return_type>()
+                                  .await_ready();
+                          })) {
+                return call_binding_throwing<Bindings...>(id);
+            } else {
+#endif
+                return call_binding<Bindings...>(id);
+#if __has_include("zpp_throwing.h")
+            }
+#endif
+        }
+
+        constexpr auto serve()
+        {
+            rpc_impl::id id;
+            if (auto result = in(id); failure(result)) {
+                return decltype(serve(rpc_impl::id{})){result.code};
+            }
+
+            return serve(id);
+        }
+
+        In & in;
+        Out & out;
+        [[no_unique_address]] Context context;
+    };
+
+#if defined __clang__ || !defined __GNUC__ || __GNUC__ >= 12 // GCC issue
+    template <typename... Types>
+    server(Types && ...) -> server<Types&&...>;
+#endif
+
+#if defined __clang__ || !defined __GNUC__ || __GNUC__ >= 12 // GCC issue
+    constexpr static auto client_server(auto && in, auto && out, auto &&... context)
+    {
+        return std::tuple{client{in, out}, server{in, out, context...}};
+    }
+#else
+    constexpr static auto client_server(auto && in, auto && out)
+    {
+        return std::tuple{client<decltype(in), decltype(out)>{in, out},
+                          server<decltype(in), decltype(out)>{in, out}};
+    }
+
+    constexpr static auto client_server(auto && in, auto && out, auto && context)
+    {
+        return std::tuple{
+            client<decltype(in), decltype(out)>{in, out},
+            server<decltype(in), decltype(out), decltype(context)>{
+                in, out, context}};
+    }
+#endif
+};
+
+template <typename... Bindings>
+struct rpc_checker
+{
+    template <typename Binding>
+    struct checker
+    {
+        using serialize = zpp::bits::members<1>;
+        using serialize_id = typename Binding::id;
+        int dummy{};
+    };
+
+    using traits = traits::variant<std::variant<checker<Bindings>...>>;
+    using type = rpc_impl<Bindings...>;
+};
+
+template <typename... Bindings>
+using rpc = typename rpc_checker<Bindings...>::type;
 
 template <typename Type>
 struct big_endian
@@ -2525,6 +2884,18 @@ template <string_literal String>
 constexpr auto operator""_sha256()
 {
     return sha256<String>();
+}
+
+template <string_literal String>
+constexpr auto operator""_sha1_int()
+{
+    return id_v<sha1<String>(), sizeof(int)>;
+}
+
+template <string_literal String>
+constexpr auto operator""_sha256_int()
+{
+    return id_v<sha256<String>(), sizeof(int)>;
 }
 } // namespace string_literals
 } // namespace literals
