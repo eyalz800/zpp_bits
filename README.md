@@ -267,7 +267,8 @@ out.reset(); // reset to beginning.
 out.reset(position); // reset to position.
 ```
 
-* Serializing STL containers and strings, first stores a 4 byte size, then the elements:
+* When serializing STL containers, strings and view types such as span and string view, the library
+first stores 4 byte integer representing the size, followed by the elements.
 ```cpp
 std::vector v = {1,2,3,4};
 out(v);
@@ -293,6 +294,9 @@ std::vector<int> v = {1,2,3,4};
 out(zpp::bits::unsized(v));
 in(zpp::bits::unsized(v));
 ```
+
+* Serialization of fixed size types such as arrays, `std::array`s, `std::tuple`s don't include
+any overhead except the elements followed by each other.
 
 * Serialization using argument dependent lookup is also possible, using both
 the automatic member serialization way or with fully defined serialization functions.
