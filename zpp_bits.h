@@ -877,7 +877,7 @@ protected:
             return serialize(*this, item);
         } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
             auto size = m_data.size();
-            if (m_position + sizeof(item) > size) [[unlikely]] {
+            if (sizeof(item) > size - m_position) [[unlikely]] {
                 if constexpr (is_resizable) {
                     m_data.resize((sizeof(item) + size) * 3 / 2);
                 } else {
@@ -904,7 +904,7 @@ protected:
                              }) {
             auto size = m_data.size();
             auto item_size_in_bytes = item.size_in_bytes();
-            if (m_position + item_size_in_bytes > size) [[unlikely]] {
+            if (item_size_in_bytes > size - m_position) [[unlikely]] {
                 if constexpr (is_resizable) {
                     m_data.resize((item_size_in_bytes + size) * 3 / 2);
                 } else {
@@ -1212,7 +1212,7 @@ private:
             return serialize(*this, item);
         } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
             auto size = m_data.size();
-            if (m_position + sizeof(item) > size) [[unlikely]] {
+            if (sizeof(item) > size - m_position) [[unlikely]] {
                 return std::errc::result_out_of_range;
             }
             if (std::is_constant_evaluated()) {
@@ -1235,7 +1235,7 @@ private:
                              }) {
             auto size = m_data.size();
             auto item_size_in_bytes = item.size_in_bytes();
-            if (m_position + item_size_in_bytes > size) [[unlikely]] {
+            if (item_size_in_bytes > size - m_position) [[unlikely]] {
                 return std::errc::result_out_of_range;
             }
             if (std::is_constant_evaluated()) {
