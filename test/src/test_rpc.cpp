@@ -113,6 +113,22 @@ TEST(test_rpc, normal_function)
     EXPECT_EQ((client.response<"foo"_sha256_int>().or_throw()), 1338);
 }
 
+TEST(test_rpc, normal_function_implicit_conversion)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+
+    using rpc = zpp::bits::rpc<
+        zpp::bits::bind<foo, "foo"_sha256_int>,
+        zpp::bits::bind<bar, "bar"_sha256_int>
+    >;
+
+    auto [client, server] = rpc::client_server(in, out);
+    client.request<"foo"_sha256_int>(short{1337}, "hello"s).or_throw();
+    server.serve().or_throw();
+
+    EXPECT_EQ((client.response<"foo"_sha256_int>().or_throw()), 1338);
+}
+
 TEST(test_rpc, normal_function_str)
 {
     auto [data, in, out] = zpp::bits::data_in_out();
