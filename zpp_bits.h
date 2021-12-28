@@ -2149,8 +2149,8 @@ struct rpc_impl
             }
         }
 
-        template <typename Id>
-        constexpr auto request(auto &&... arguments)
+        template <typename Id, std::size_t... Indices>
+        constexpr auto request(std::index_sequence<Indices...>, auto &&... arguments)
         {
             using request_binding = decltype(binding<Id, Bindings...>());
             using parameters_type =
@@ -2158,13 +2158,48 @@ struct rpc_impl
 
             if constexpr (std::is_void_v<parameters_type>) {
                 static_assert(!sizeof...(arguments));
-            } else {
+                return out(Id::value);
+            } else if constexpr (std::same_as<
+                                     std::tuple<std::remove_cvref_t<
+                                         decltype(arguments)>...>,
+                                     parameters_type>
+
+            ) {
                 static_assert(std::same_as<std::tuple<std::remove_cvref_t<
                                                decltype(arguments)>...>,
                                            parameters_type>);
+                return out(Id::value, arguments...);
+            } else {
+                static_assert(requires {
+                    {parameters_type{
+                        std::forward_as_tuple<decltype(arguments)...>(
+                            arguments...)}};
+                });
+
+                return out(
+                    Id::value,
+                    static_cast<std::conditional_t<
+                        std::is_fundamental_v<
+                            std::remove_cvref_t<decltype(get<Indices>(
+                                std::declval<parameters_type>()))>> ||
+                            std::is_enum_v<
+                                std::remove_cvref_t<decltype(get<Indices>(
+                                    std::declval<parameters_type>()))>>,
+                        std::remove_cvref_t<decltype(get<Indices>(
+                            std::declval<parameters_type>()))>,
+                        const decltype(get<Indices>(
+                            std::declval<parameters_type>())) &>>(
+                        arguments)...);
             }
 
-            return out(Id::value, arguments...);
+        }
+
+        template <typename Id>
+        constexpr auto request(auto &&... arguments)
+        {
+            return request<Id>(
+                std::make_index_sequence<sizeof...(arguments)>{},
+                arguments...);
         }
 
         template <auto Id, auto MaxSize = -1>
