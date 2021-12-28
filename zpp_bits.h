@@ -975,9 +975,12 @@ protected:
                           requires(type container) {
                               container.resize(1);
                           } ||
-                          requires (type container) {
+                          (requires (type container) {
                               container = {container.data(), 1};
-                          })) {
+                          } && !requires {
+                              requires (type::extent != std::dynamic_extent);
+                              requires std::integral_constant<std::size_t, type{}.size()>::value;
+                          }))) {
             if (auto result =
                     serialize_one(static_cast<SizeType>(container.size()));
                 failure(result)) [[unlikely]] {
@@ -1302,11 +1305,18 @@ private:
             std::remove_reference_t<decltype(container[0])>>;
 
         if constexpr (!std::is_void_v<SizeType> &&
-                      (
-                          requires (type container) { container.resize(1); } ||
-                          requires (type container) {
-                              container = {container.data(), 1};
-                          })) {
+                      (requires(type container) { container.resize(1); } ||
+                       (
+                           requires(type container) {
+                               container = {container.data(), 1};
+                           } &&
+                           !requires {
+                               requires(type::extent !=
+                                        std::dynamic_extent);
+                               requires std::integral_constant<
+                                   std::size_t,
+                                   type{}.size()>::value;
+                           }))) {
             SizeType size{};
             if (auto result = serialize_one(size); failure(result))
                 [[unlikely]] {
@@ -1350,9 +1360,23 @@ private:
                                value_type>)&&requires(type container) {
                               container = {m_data.data(), 1};
                           }) {
-                if constexpr (std::is_void_v<SizeType>) {
+                if constexpr (requires {
+                                  requires(type::extent !=
+                                           std::dynamic_extent);
+                                  requires std::integral_constant<
+                                      std::size_t,
+                                      type{}.size()>::value;
+                              }) {
+                    if (type::extent > m_data.size() - m_position)
+                        [[unlikely]] {
+                        return std::errc::value_too_large;
+                    }
+                    container = {m_data.data() + m_position, type::extent};
+                    m_position += type::extent;
+                } else if constexpr (std::is_void_v<SizeType>) {
                     auto size = m_data.size();
-                    container = {m_data.data() + m_position, size - m_position};
+                    container = {m_data.data() + m_position,
+                                 size - m_position};
                     m_position = size;
                 }
                 return {};
