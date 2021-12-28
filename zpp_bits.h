@@ -2068,14 +2068,16 @@ constexpr auto apply(auto && function, auto && archive) requires(
         } else {
             parameters_type parameters;
             if constexpr (std::is_void_v<return_type>) {
-                if (auto result = archive(parameters); failure(result)) {
+                if (auto result = archive(parameters); failure(result))
+                    [[unlikely]] {
                     return result;
                 }
                 std::apply(std::forward<decltype(function)>(function),
                            std::move(parameters));
                 return errc{};
             } else {
-                if (auto result = archive(parameters); failure(result)) {
+                if (auto result = archive(parameters); failure(result))
+                    [[unlikely]] {
                     return value_or_errc<return_type>{result};
                 }
                 return value_or_errc<return_type>{
@@ -2091,14 +2093,16 @@ constexpr auto apply(auto && function, auto && archive) requires(
         } else {
             parameters_type parameters;
             if constexpr (std::is_void_v<return_type>) {
-                if (auto result = archive(parameters); failure(result)) {
+                if (auto result = archive(parameters); failure(result))
+                    [[unlikely]] {
                     return result;
                 }
                 std::apply(std::forward<decltype(function)>(function),
                            std::move(parameters));
                 return errc{};
             } else {
-                if (auto result = archive(parameters); failure(result)) {
+                if (auto result = archive(parameters); failure(result))
+                    [[unlikely]] {
                     return value_or_errc<return_type>{result};
                 }
                 return value_or_errc<return_type>{
@@ -2123,7 +2127,8 @@ apply(auto && self, auto && function, auto && archive) requires(
     } else {
         parameters_type parameters;
         if constexpr (std::is_void_v<return_type>) {
-            if (auto result = archive(parameters); failure(result)) {
+            if (auto result = archive(parameters); failure(result))
+                [[unlikely]] {
                 return result;
             }
             // Ignore GCC issue.
@@ -2143,7 +2148,8 @@ apply(auto && self, auto && function, auto && archive) requires(
 #endif
             return errc{};
         } else {
-            if (auto result = archive(parameters); failure(result)) {
+            if (auto result = archive(parameters); failure(result))
+                [[unlikely]] {
                 return value_or_errc<return_type>{result};
             }
             return value_or_errc<return_type>(std::apply(
@@ -2322,7 +2328,8 @@ struct rpc_impl
                     return;
                 } else {
                     nested_return return_value;
-                    if (auto result = in(return_value); failure(result)) {
+                    if (auto result = in(return_value); failure(result))
+                        [[unlikely]] {
                         return value_or_errc<nested_return>{result};
                     }
                     return value_or_errc<nested_return>{std::move(return_value)};
@@ -2330,7 +2337,8 @@ struct rpc_impl
 #endif
             } else {
                 return_type return_value;
-                if (auto result = in(return_value); failure(result)) {
+                if (auto result = in(return_value); failure(result))
+                    [[unlikely]] {
                     return value_or_errc<return_type>{result};
                 }
                 return value_or_errc<return_type>{std::move(return_value)};
@@ -2389,7 +2397,7 @@ struct rpc_impl
                                              in, context)),
                                          errc>) {
                     if (auto result = FirstBinding::call(in, context);
-                        failure(result)) {
+                        failure(result)) [[unlikely]] {
                         return result;
                     }
                     return errc{};
@@ -2398,7 +2406,7 @@ struct rpc_impl
                     return out(FirstBinding::call(in, context));
                 } else {
                     if (auto result = FirstBinding::call(in, context);
-                        failure(result)) {
+                        failure(result)) [[unlikely]] {
                         return result.error();
                     } else {
                         return out(result.value());
@@ -2427,7 +2435,7 @@ struct rpc_impl
                                              in, context)),
                                          errc>) {
                     if (auto result = FirstBinding::call(in, context);
-                        failure(result)) {
+                        failure(result)) [[unlikely]] {
                         co_yield result.code;
                     }
                     co_return;
@@ -2451,7 +2459,7 @@ struct rpc_impl
                     }
                 } else {
                     if (auto result = FirstBinding::call(in, context);
-                        failure(result)) {
+                        failure(result)) [[unlikely]] {
                         co_yield result.error().code;
                     } else if constexpr (requires {
                                              result.value().await_ready();
@@ -2497,7 +2505,7 @@ struct rpc_impl
         constexpr auto serve()
         {
             rpc_impl::id id;
-            if (auto result = in(id); failure(result)) {
+            if (auto result = in(id); failure(result)) [[unlikely]] {
                 return decltype(serve(rpc_impl::id{})){result.code};
             }
 
