@@ -551,7 +551,7 @@ auto [client, server] = rpc::client_server(in, out);
 
 // Or separately:
 rpc::client client{in, out};
-rpc::client server{in, out};
+rpc::server server{in, out};
 
 // Request from the client:
 client.request<"foo"_sha256_int>(1337, "hello"s).or_throw();
@@ -601,13 +601,14 @@ struct a
     int foo(int i, std::string s);
 };
 
+std::string bar(int i, int j);
+
 using rpc = zpp::bits::rpc<
-    zpp::bits::bind<&a::foo, "foo"_sha256_int>,
+    zpp::bits::bind<&a::foo, "a::foo"_sha256_int>,
     zpp::bits::bind<bar, "bar"_sha256_int>
 >;
 
 auto [data, in, out] = zpp::bits::data_in_out();
-
 
 // Our object.
 a a1;
@@ -617,7 +618,16 @@ auto [client, server] = rpc::client_server(in, out, a1);
 
 // Or separately:
 rpc::client client{in, out};
-rpc::client server{in, out, a1};
+rpc::server server{in, out, a1};
+
+// Request from the client:
+client.request<"a::foo"_sha256_int>(1337, "hello"s).or_throw();
+
+// Serve the request from the server:
+server.serve().or_throw();
+
+// Read back the response
+client.response<"a::foo"_sha256_int>().or_throw(); // == a1.foo(1337, "hello"s);
 ```
 
 * As part of the library implementation it was required to implement some reflection types, for
