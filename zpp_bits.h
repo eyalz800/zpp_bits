@@ -2253,7 +2253,7 @@ struct rpc_impl
                     if (auto result = in(return_value); failure(result)) {
                         return value_or_errc<nested_return>{result};
                     }
-                    return value_or_errc<nested_return>{return_value};
+                    return value_or_errc<nested_return>{std::move(return_value)};
                 }
 #endif
             } else {
@@ -2261,7 +2261,7 @@ struct rpc_impl
                 if (auto result = in(return_value); failure(result)) {
                     return value_or_errc<return_type>{result};
                 }
-                return value_or_errc<return_type>{return_value};
+                return value_or_errc<return_type>{std::move(return_value)};
             }
         }
 

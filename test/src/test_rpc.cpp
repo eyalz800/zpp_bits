@@ -20,6 +20,13 @@ std::string foo_str(int i, std::string s)
     return "1338"s;
 }
 
+std::unique_ptr<std::string> foo_str_move(int i, std::unique_ptr<std::string> s)
+{
+    EXPECT_EQ(i, 1337);
+    EXPECT_EQ(*s, "hello"s);
+    return std::make_unique<std::string>("1338"s);
+}
+
 std::string foo_str_no_params()
 {
     return "1338"s;
@@ -144,6 +151,26 @@ TEST(test_rpc, normal_function_str)
     server.serve().or_throw();
 
     EXPECT_EQ((client.response<"foo_str"_sha256_int>().or_throw()), "1338"s);
+}
+
+TEST(test_rpc, function_str_move)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+
+    using rpc = zpp::bits::rpc<
+        zpp::bits::bind<foo, "foo"_sha256_int>,
+        zpp::bits::bind<foo_str_move, "foo_str_move"_sha256_int>,
+        zpp::bits::bind<bar, "bar"_sha256_int>
+    >;
+
+    auto [client, server] = rpc::client_server(in, out);
+    client
+        .request<"foo_str_move"_sha256_int>(
+            1337, std::make_unique<std::string>("hello"s))
+        .or_throw();
+    server.serve().or_throw();
+
+    EXPECT_EQ((*client.response<"foo_str_move"_sha256_int>().or_throw()), "1338"s);
 }
 
 TEST(test_rpc, normal_function_str_no_params)
