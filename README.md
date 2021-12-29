@@ -277,11 +277,17 @@ The reason why the default size type is of 4 bytes (i.e `std::uint32_t`) is that
 almost never reach a case of a container being more than ~4 billion items, and it may be unjust to
 pay the price of 8 bytes size by default.
 
-* For specific size types that are not 4 bytes, use `zpp::bits::sized` like so:
+* For specific size types that are not 4 bytes, use `zpp::bits::sized`/`zpp::bits::sized_t` like so:
 ```cpp
+// Using `sized` function:
 std::vector<int> v = {1,2,3,4};
 out(zpp::bits::sized<std::uint16_t>(v));
 in(zpp::bits::sized<std::uint16_t>(v));
+
+// Using `sized_t` type:
+zpp::bits::sized_t<std::vector<int>, std::uint16_t> v = {1,2,3,4};
+out(v);
+in(v);
 ```
 
 Make sure that the size type is large enough for the serialized object, otherwise less items
@@ -289,9 +295,15 @@ will be serialized, according to conversion rules of unsigned types.
 
 * You can also choose to not serialize the size at all, like so:
 ```cpp
+// Using `unsized` function:
 std::vector<int> v = {1,2,3,4};
 out(zpp::bits::unsized(v));
 in(zpp::bits::unsized(v));
+
+// Using `unsized_t` type:
+zpp::bits::unsized_t<std::vector<int>> v = {1,2,3,4};
+out(v);
+in(v);
 ```
 
 * Serialization of fixed size types such as arrays, `std::array`s, `std::tuple`s don't include

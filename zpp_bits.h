@@ -265,6 +265,10 @@ concept container = requires(Type container)
     container.size();
     container.begin();
     container.end();
+}
+&&!requires
+{
+    requires std::remove_cvref_t<Type>::disable_container_concept::value;
 };
 
 template <typename Type>
@@ -480,36 +484,55 @@ constexpr auto operator|(auto left, auto right) requires requires
     return aggregated_options{std::move(left), std::move(right)};
 }
 
-template <typename SizeType, concepts::container Container>
-struct sized_container
+template <concepts::container Container, typename SizeType>
+struct sized_container : public Container
 {
     static_assert(std::is_unsigned_v<SizeType> || std::is_void_v<SizeType>);
 
-    constexpr explicit sized_container(Container & container) :
-        container(container)
+    using Container::Container;
+    using disable_container_concept = std::true_type;
+
+    constexpr static auto serialize(auto & serializer, auto & self)
+    {
+        return serializer.template serialize_one<SizeType>(
+            static_cast<Container &>(self));
+    }
+};
+
+template <typename Container, typename SizeType>
+using sized_t = sized_container<Container, SizeType>;
+
+template <typename Container>
+using unsized_t = sized_t<Container, void>;
+
+template <concepts::container Container, typename SizeType>
+struct sized_container_ref
+{
+    static_assert(std::is_unsigned_v<SizeType> || std::is_void_v<SizeType>);
+
+    constexpr explicit sized_container_ref(Container && value) :
+        value(std::forward<Container>(value))
     {
     }
 
     constexpr static auto serialize(auto & serializer, auto & self)
     {
-        return serializer.template serialize_one<SizeType>(self.container);
+        return serializer.template serialize_one<SizeType>(self.value);
     }
 
-    Container & container;
+    Container value;
 };
 
 template <typename SizeType, typename Container>
 constexpr auto sized(Container && container)
 {
-    return sized_container<SizeType, std::remove_reference_t<Container>>(
-        container);
+    return sized_container_ref<Container &, SizeType>(container);
 }
 
 template <typename Container>
 constexpr auto unsized(Container && container)
 {
-    return sized_container<void, std::remove_reference_t<Container>>(
-        container);
+    return sized_container_ref<Container &, void>(container);
 }
 
 constexpr auto success(std::errc code)
@@ -778,8 +801,11 @@ public:
 
     friend access;
 
-    template <typename, concepts::container>
+    template <concepts::container, typename>
     friend struct sized_container;
+
+    template <concepts::container, typename>
+    friend struct sized_container_ref;
 
     template <typename, concepts::variant>
     friend struct known_id_variant;
@@ -1149,8 +1175,11 @@ public:
 
     friend access;
 
-    template <typename, concepts::container>
+    template <concepts::container, typename>
     friend struct sized_container;
+
+    template <concepts::container, typename>
+    friend struct sized_container_ref;
 
     template <typename, concepts::variant>
     friend struct known_id_variant;

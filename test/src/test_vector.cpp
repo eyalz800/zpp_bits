@@ -1,5 +1,8 @@
 #include "test.h"
 
+namespace test_vector
+{
+
 TEST(vector, integer)
 {
     auto [data, in, out] = zpp::bits::data_in_out();
@@ -119,3 +122,39 @@ TEST(vector, unsized_integer)
     EXPECT_EQ(v, (std::vector{1,2,3,4}));
 }
 
+TEST(vector, sized_t_1b_integer)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(zpp::bits::sized_t<std::vector<int>, std::uint8_t>{1,2,3,4}).or_throw();
+
+    EXPECT_EQ(hexlify(data),
+              "04"
+              "01000000"
+              "02000000"
+              "03000000"
+              "04000000");
+
+    zpp::bits::sized_t<std::vector<int>, std::uint8_t> v;
+    in(v).or_throw();
+
+    EXPECT_EQ(v, (std::vector{1,2,3,4}));
+}
+
+TEST(vector, unsized_t_integer)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(zpp::bits::unsized_t<std::vector<int>>{1,2,3,4}).or_throw();
+
+    EXPECT_EQ(hexlify(data),
+              "01000000"
+              "02000000"
+              "03000000"
+              "04000000");
+
+    zpp::bits::unsized_t<std::vector<int>> v(4);
+    in(v).or_throw();
+
+    EXPECT_EQ(v, (std::vector{1,2,3,4}));
+}
+
+} // namespace test_vector
