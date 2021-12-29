@@ -10,10 +10,8 @@ The library tries to be simpler for use, but has more or less similar API to its
 
 Motivation
 ----------
-Provide a single, simple header file, that would enable one to:
-* Enable save & load any STL container / string / utility into and from a binary form, in a zero overhead approach.
-* Enable save & load any object, by adding only a few lines to any class, without breaking existing code.
-* Enable save & load the dynamic type of any object, by a simple one-liner.
+* Serialize any object from and to binary form as seamless as possible.
+* Provide lightweight remote procedure call (RPC) capabilities
 
 ### The Difference From zpp::serializer
 * It is simpler
@@ -26,6 +24,7 @@ Provide a single, simple header file, that would enable one to:
 * Better naming for utility classes and namespaces, for instance `zpp::bits` is more easily typed than `zpp::serializer`.
 * Modernized polymorphism, based on variant and flexible serialization ids, compared to `zpp::serializer` global
 polymorphic types with fixed 8 bytes of sha1 serialization id.
+* Lightweight RPC capabilities
 
 Contents
 --------
