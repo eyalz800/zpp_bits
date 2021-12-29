@@ -814,9 +814,25 @@ public:
         return serialize_many(items...);
     }
 
+    constexpr decltype(auto) data()
+    {
+        return m_data;
+    }
+
     constexpr std::size_t position() const
     {
         return m_position;
+    }
+
+    constexpr std::size_t & position()
+    {
+        return m_position;
+    }
+
+    constexpr auto remaining_data()
+    {
+        return std::span{m_data.data() + m_position,
+                         m_data.size() - m_position};
     }
 
     constexpr void reset(std::size_t position = 0)
@@ -1173,9 +1189,25 @@ public:
         return serialize_many(items...);
     }
 
+    constexpr decltype(auto) data()
+    {
+        return m_data;
+    }
+
     constexpr std::size_t position() const
     {
         return m_position;
+    }
+
+    constexpr std::size_t & position()
+    {
+        return m_position;
+    }
+
+    constexpr auto remaining_data()
+    {
+        return std::span{m_data.data() + m_position,
+                         m_data.size() - m_position};
     }
 
     constexpr void reset(std::size_t position = 0)
@@ -2231,14 +2263,75 @@ struct bind
         typename function_traits<function_type>::parameters_type;
     using return_type =
         typename function_traits<function_type>::return_type;
+    static constexpr auto opaque = false;
 
-    constexpr static decltype(auto) call(auto && archive, auto && self)
+    constexpr static decltype(auto) call(auto && archive, auto && context)
     {
         if constexpr (std::is_member_function_pointer_v<
                           std::remove_cvref_t<decltype(Function)>>) {
-            return apply(self, Function, archive);
+            return apply(context, Function, archive);
         } else {
             return apply(Function, archive);
+        }
+    }
+};
+
+template <auto Function, auto Id, auto MaxSize = -1>
+struct bind_opaque
+{
+    using id = zpp::bits::id<Id, MaxSize>;
+    using function_type = decltype(Function);
+    using parameters_type =
+        typename function_traits<function_type>::parameters_type;
+    using return_type =
+        typename function_traits<function_type>::return_type;
+    static constexpr auto opaque = true;
+
+    constexpr static decltype(auto) call(auto && in, auto && out, auto && context)
+    {
+        if constexpr (std::is_member_function_pointer_v<
+                          std::remove_cvref_t<decltype(Function)>>) {
+            if constexpr (requires { (context.*Function)(in, out); }) {
+                return (context.*Function)(in, out);
+            } else if constexpr (requires { (context.*Function)(in); }) {
+                return (context.*Function)(in);
+            } else if constexpr (requires(decltype(in.data()) data) {
+                                     (context.*Function)(data);
+                                 }) {
+                struct _
+                {
+                    decltype(in) archive;
+                    decltype(in.remaining_data()) remaining_data;
+                    ~_()
+                    {
+                        archive.position() += remaining_data.size();
+                    }
+                } _{in, in.remaining_data()};
+                return (context.*Function)(_.remaining_data);
+            } else {
+                return (context.*Function)();
+            }
+        } else {
+            if constexpr (requires { Function(in, out); }) {
+                return Function(in, out);
+            } else if constexpr (requires { Function(in); }) {
+                return Function(in);
+            } else if constexpr (requires(decltype(in.data()) data) {
+                                     Function(data);
+                                 }) {
+                struct _
+                {
+                    decltype(in) archive;
+                    decltype(in.remaining_data()) remaining_data;
+                    ~_()
+                    {
+                        archive.position() += remaining_data.size();
+                    }
+                } _{in, in.remaining_data()};
+                return Function(_.remaining_data);
+            } else {
+                return Function();
+            }
         }
     }
 };
@@ -2279,7 +2372,8 @@ struct rpc_impl
         }
 
         template <typename Id, std::size_t... Indices>
-        constexpr auto request(std::index_sequence<Indices...>, auto &&... arguments)
+        constexpr auto request(std::index_sequence<Indices...>,
+                               auto &&... arguments)
         {
             using request_binding = decltype(binding<Id, Bindings...>());
             using parameters_type =
@@ -2288,15 +2382,14 @@ struct rpc_impl
             if constexpr (std::is_void_v<parameters_type>) {
                 static_assert(!sizeof...(arguments));
                 return out(Id::value);
+            } else if constexpr (request_binding::opaque) {
+                return out(Id::value, arguments...);;
             } else if constexpr (std::same_as<
                                      std::tuple<std::remove_cvref_t<
                                          decltype(arguments)>...>,
                                      parameters_type>
 
             ) {
-                static_assert(std::same_as<std::tuple<std::remove_cvref_t<
-                                               decltype(arguments)>...>,
-                                           parameters_type>);
                 return out(Id::value, arguments...);
             } else {
                 static_assert(requires {
@@ -2320,7 +2413,6 @@ struct rpc_impl
                             std::declval<parameters_type>())) &>>(
                         arguments)...);
             }
-
         }
 
         template <typename Id>
@@ -2337,8 +2429,9 @@ struct rpc_impl
             return request<zpp::bits::id<Id, MaxSize>>(arguments...);
         }
 
-        template <typename Id>
-        constexpr auto request_body(auto &&... arguments)
+        template <typename Id, std::size_t... Indices>
+        constexpr auto request_body(std::index_sequence<Indices...>,
+                                    auto &&... arguments)
         {
             using request_binding = decltype(binding<Id, Bindings...>());
             using parameters_type =
@@ -2346,13 +2439,45 @@ struct rpc_impl
 
             if constexpr (std::is_void_v<parameters_type>) {
                 static_assert(!sizeof...(arguments));
-            } else {
-                static_assert(std::same_as<std::tuple<std::remove_cvref_t<
-                                               decltype(arguments)>...>,
-                                           parameters_type>);
-            }
+                return;
+            } else if constexpr (request_binding::opaque) {
+                return out(arguments...);;
+            } else if constexpr (std::same_as<
+                                     std::tuple<std::remove_cvref_t<
+                                         decltype(arguments)>...>,
+                                     parameters_type>
 
-            return out(arguments...);
+            ) {
+                return out(arguments...);
+            } else {
+                static_assert(requires {
+                    {parameters_type{
+                        std::forward_as_tuple<decltype(arguments)...>(
+                            arguments...)}};
+                });
+
+                return out(
+                    static_cast<std::conditional_t<
+                        std::is_fundamental_v<
+                            std::remove_cvref_t<decltype(get<Indices>(
+                                std::declval<parameters_type>()))>> ||
+                            std::is_enum_v<
+                                std::remove_cvref_t<decltype(get<Indices>(
+                                    std::declval<parameters_type>()))>>,
+                        std::remove_cvref_t<decltype(get<Indices>(
+                            std::declval<parameters_type>()))>,
+                        const decltype(get<Indices>(
+                            std::declval<parameters_type>())) &>>(
+                        arguments)...);
+            }
+        }
+
+        template <typename Id>
+        constexpr auto request_body(auto &&... arguments)
+        {
+            return request_body<Id>(
+                std::make_index_sequence<sizeof...(arguments)>{},
+                arguments...);
         }
 
         template <auto Id, auto MaxSize = -1>
@@ -2436,7 +2561,7 @@ struct rpc_impl
         }
 
         template <typename FirstBinding, typename... OtherBindings>
-        constexpr auto call_binding(auto & id)
+        constexpr auto call_binding(auto & id) requires (!FirstBinding::opaque)
         {
             if (FirstBinding::id::value == id) {
                 if constexpr (std::is_void_v<decltype(FirstBinding::call(
@@ -2472,9 +2597,53 @@ struct rpc_impl
             }
         }
 
+        template <typename FirstBinding, typename... OtherBindings>
+        constexpr auto call_binding(auto & id) requires FirstBinding::opaque
+        {
+            if (FirstBinding::id::value == id) {
+                if constexpr (std::is_void_v<decltype(FirstBinding::call(
+                                  in, out, context))>) {
+                    FirstBinding::call(in, out, context);
+                    return errc{};
+                } else if constexpr (std::same_as<
+                                         decltype(FirstBinding::call(
+                                             in, out, context)),
+                                         errc>) {
+                    if (auto result = FirstBinding::call(in, out, context);
+                        failure(result)) [[unlikely]] {
+                        return result;
+                    }
+                    return errc{};
+                } else if constexpr (
+                    requires {
+                        std::same_as<
+                            typename decltype(FirstBinding::call(
+                                in, out, context))::value_type,
+                            value_or_errc<decltype(FirstBinding::call(
+                                in, out, context))>>;
+                    }) {
+                    if (auto result = FirstBinding::call(in, out, context);
+                        failure(result)) [[unlikely]] {
+                        return result.error();
+                    } else {
+                        return out(result.value());
+                    }
+                } else {
+                    return out(FirstBinding::call(in, out, context));
+                }
+            } else {
+                if constexpr (!sizeof...(OtherBindings)) {
+                    return errc{std::errc::not_supported};
+                } else {
+                    return call_binding<OtherBindings...>(id);
+                }
+            }
+        }
+
 #if __has_include("zpp_throwing.h")
         template <typename FirstBinding, typename... OtherBindings>
-        zpp::throwing<void> call_binding_throwing(auto & id)
+        zpp::throwing<void>
+        call_binding_throwing(auto & id) requires(!FirstBinding::opaque)
         {
             if (FirstBinding::id::value == id) {
                 if constexpr (std::is_void_v<decltype(FirstBinding::call(
@@ -2523,6 +2692,75 @@ struct rpc_impl
                         co_return;
                     } else {
                         co_await out(result.value());
+                    }
+                }
+            } else {
+                if constexpr (!sizeof...(OtherBindings)) {
+                    co_yield std::errc::not_supported;
+                } else {
+                    co_return co_await call_binding_throwing<
+                        OtherBindings...>(id);
+                }
+            }
+        }
+
+        template <typename FirstBinding, typename... OtherBindings>
+        zpp::throwing<void>
+        call_binding_throwing(auto & id) requires FirstBinding::opaque
+        {
+            if (FirstBinding::id::value == id) {
+                if constexpr (std::is_void_v<decltype(FirstBinding::call(
+                                  in, out, context))>) {
+                    FirstBinding::call(in, out, context);
+                    co_return;
+                } else if constexpr (std::same_as<
+                                         decltype(FirstBinding::call(
+                                             in, out, context)),
+                                         errc>) {
+                    if (auto result = FirstBinding::call(in, out, context);
+                        failure(result)) [[unlikely]] {
+                        co_yield result.code;
+                    }
+                    co_return;
+                } else if constexpr (
+                    requires {
+                        std::same_as<
+                            typename decltype(FirstBinding::call(
+                                in, out, context))::value_type,
+                            value_or_errc<decltype(FirstBinding::call(
+                                in, out, context))>>;
+                    }) {
+                    if (auto result = FirstBinding::call(in, out, context);
+                        failure(result)) [[unlikely]] {
+                        co_yield result.error().code;
+                    } else if constexpr (requires {
+                                             result.value().await_ready();
+                                         }) {
+                        if constexpr (!std::is_void_v<
+                                          decltype(result.value()
+                                                       .await_resume())>) {
+                            co_await out(co_await result.value());
+                        }
+                        co_return;
+                    } else {
+                        co_await out(result.value());
+                    }
+                } else {
+                    if constexpr (requires {
+                                      FirstBinding::call(in, out, context)
+                                          .await_ready();
+                                  }) {
+                        if constexpr (std::is_void_v<
+                                          decltype(FirstBinding::call(
+                                                       in, out, context)
+                                                       .await_resume())>) {
+                            co_await FirstBinding::call(in, out, context);
+                        } else {
+                            co_await out(
+                                co_await FirstBinding::call(in, out, context));
+                        }
+                    } else {
+                        co_await out(FirstBinding::call(in, out, context));
                     }
                 }
             } else {
