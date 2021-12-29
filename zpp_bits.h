@@ -452,6 +452,7 @@ concept unspecialized =
 template <typename Type>
 concept empty = requires
 {
+    std::integral_constant<std::size_t, sizeof(Type)>::value;
     requires std::is_empty_v<std::remove_cvref_t<Type>>;
 };
 
@@ -491,6 +492,7 @@ struct string_literal : public std::array<CharType, Size + 1>
     }
 
     constexpr auto operator<=>(const string_literal &) const = default;
+
     constexpr default_size_type size() const
     {
         return Size;
@@ -1054,6 +1056,8 @@ protected:
             }
             m_position += item_size_in_bytes;
             return {};
+        } else if constexpr (concepts::empty<type>) {
+            return {};
         } else if constexpr (concepts::byte_serializable<type>) {
             return serialize_one(as_bytes(item));
         } else {
@@ -1405,6 +1409,8 @@ private:
                             item_size_in_bytes);
             }
             m_position += item_size_in_bytes;
+            return {};
+        } else if constexpr (concepts::empty<type>) {
             return {};
         } else if constexpr (concepts::byte_serializable<type>) {
             return serialize_one(as_bytes(item));
@@ -1858,7 +1864,7 @@ constexpr auto to_bytes_one()
     static_assert(success(error));
 
     if constexpr (!size) {
-        return std::array<std::byte, 1>{};
+        return string_literal<std::byte, 0>{};
     } else {
         std::array<std::byte, size> data;
         (void) out{data}(Object);
@@ -1869,9 +1875,14 @@ constexpr auto to_bytes_one()
 template <auto... Data>
 constexpr auto join()
 {
-    std::array<std::byte, (0 + ... + sizeof(Data))> data;
-    (void) zpp::bits::out{data}(Data...);
-    return data;
+    constexpr auto size = (0 + ... + Data.size());
+    if constexpr (!size) {
+        return string_literal<std::byte, 0>{};
+    } else {
+        std::array<std::byte, size> data;
+        (void) zpp::bits::out{data}(Data...);
+        return data;
+    }
 }
 
 template <auto Left, auto Right = -1>
@@ -3116,29 +3127,17 @@ constexpr auto sha1()
     auto h3 = big_endian{std::uint32_t{0x10325476u}};
     auto h4 = big_endian{std::uint32_t{0xc3d2e1f0u}};
 
-    constexpr auto empty = requires
-    {
-        requires concepts::container<decltype(Object)> && Object.empty();
-    };
     constexpr auto original_message = to_bytes<Object>();
-    constexpr auto original_message_size = empty ? 0 : original_message.size();
-    constexpr auto message_with_0x80 = [&] {
-        if constexpr (empty) {
-            return to_bytes<std::byte{0x80}>();
-        } else {
-            return to_bytes<original_message, std::byte{0x80}>();
-        }
-    }();
-
     constexpr auto chunk_size = 512 / CHAR_BIT;
-    constexpr auto message =
-        to_bytes<message_with_0x80,
-                 std::array<std::byte,
-                            align(message_with_0x80.size(), chunk_size) -
-                                message_with_0x80.size() -
-                                sizeof(original_message_size)>{},
-                 big_endian<std::uint64_t>{original_message_size *
-                                           CHAR_BIT}>();
+    constexpr auto message = to_bytes<
+        original_message,
+        std::byte{0x80},
+        std::array<std::byte,
+                   align(original_message.size() + sizeof(std::byte{0x80}),
+                         chunk_size) -
+                       original_message.size() - sizeof(std::byte{0x80}) -
+                       sizeof(std::uint64_t{original_message.size()})>{},
+        big_endian<std::uint64_t>{original_message.size() * CHAR_BIT}>();
 
     for (auto chunk :
          from_bytes<message,
@@ -3252,29 +3251,17 @@ constexpr auto sha256()
                  big_endian{0x90befffau}, big_endian{0xa4506cebu},
                  big_endian{0xbef9a3f7u}, big_endian{0xc67178f2u}};
 
-    constexpr auto empty = requires
-    {
-        requires concepts::container<decltype(Object)> && Object.empty();
-    };
     constexpr auto original_message = to_bytes<Object>();
-    constexpr auto original_message_size = empty ? 0 : original_message.size();
-    constexpr auto message_with_0x80 = [&] {
-        if constexpr (empty) {
-            return to_bytes<std::byte{0x80}>();
-        } else {
-            return to_bytes<original_message, std::byte{0x80}>();
-        }
-    }();
-
     constexpr auto chunk_size = 512 / CHAR_BIT;
-    constexpr auto message =
-        to_bytes<message_with_0x80,
-                 std::array<std::byte,
-                            align(message_with_0x80.size(), chunk_size) -
-                                message_with_0x80.size() -
-                                sizeof(original_message_size)>{},
-                 big_endian<std::uint64_t>{original_message_size *
-                                           CHAR_BIT}>();
+    constexpr auto message = to_bytes<
+        original_message,
+        std::byte{0x80},
+        std::array<std::byte,
+                   align(original_message.size() + sizeof(std::byte{0x80}),
+                         chunk_size) -
+                       original_message.size() - sizeof(std::byte{0x80}) -
+                       sizeof(std::uint64_t{original_message.size()})>{},
+        big_endian<std::uint64_t>{original_message.size() * CHAR_BIT}>();
 
     for (auto chunk :
          from_bytes<message,
