@@ -492,6 +492,19 @@ struct sized_container : public Container
     using Container::Container;
     using disable_container_concept = std::true_type;
 
+    constexpr sized_container(Container && other) noexcept(
+        std::is_nothrow_move_constructible_v<Container>) :
+        Container(std::move(other))
+    {
+    }
+
+    constexpr sized_container & operator=(Container && other) noexcept(
+        std::is_nothrow_move_assignable_v<Container>)
+    {
+        Container::operator=(std::move(other));
+        return *this;
+    }
+
     constexpr static auto serialize(auto & serializer, auto & self)
     {
         return serializer.template serialize_one<SizeType>(
