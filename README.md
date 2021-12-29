@@ -633,6 +633,22 @@ server.serve().or_throw();
 client.response<"a::foo"_sha256_int>().or_throw(); // == a1.foo(1337, "hello"s);
 ```
 
+The RPC can also work in an opaque mode and let the function itself serialize/deserialize
+the data, when binding a function as opaque, using `bind_opaque`:
+```cpp
+// Each of the following signatures of `foo()` are valid for opaque rpc call:
+auto foo(zpp::bits::in<> &, zpp::bits::out<> &);
+auto foo(zpp::bits::in<> &);
+auto foo(zpp::bits::out<> &);
+auto foo(std::span<std::byte> input); // assumes all data is consumed from archive.
+auto foo(std::span<std::byte> & input); // resize input in the function to signal how much was consumed.
+
+using rpc = zpp::bits::rpc<
+    zpp::bits::bind_opaque<foo, "a::foo"_sha256_int>,
+    zpp::bits::bind<bar, "bar"_sha256_int>
+>;
+```
+
 * On the receiving end (input archive), the library supports view types of const byte types, such
 as `std::span<const std::byte>` in order to get a view at a portion of data without copying.
 This needs to be carefully used because invalidating iterators of the contained data could cause
