@@ -375,7 +375,6 @@ struct visitor
     }
 
     std::span<std::byte> data();
-    std::span<std::byte> remaining_data();
     std::size_t position() const;
     std::size_t & position();
     void reset(std::size_t = 0);
@@ -547,7 +546,7 @@ public:
     {
     }
 
-    constexpr Item * data() const
+    constexpr auto data() const
     {
         return m_items.data();
     }
@@ -913,7 +912,7 @@ public:
     template <typename, concepts::variant>
     friend struct known_dynamic_id_variant;
 
-    using value_type = typename ByteView::value_type;
+    using byte_type = typename ByteView::value_type;
 
     constexpr explicit basic_out(ByteView && view) : m_data(view)
     {
@@ -953,12 +952,6 @@ public:
     constexpr std::size_t & position()
     {
         return m_position;
-    }
-
-    constexpr auto remaining_data()
-    {
-        return std::span{m_data.data() + m_position,
-                         m_data.size() - m_position};
     }
 
     constexpr void reset(std::size_t position = 0)
@@ -1028,7 +1021,7 @@ protected:
             }
             if (std::is_constant_evaluated()) {
                 auto value = std::bit_cast<
-                    std::array<std::remove_const_t<value_type>,
+                    std::array<std::remove_const_t<byte_type>,
                                sizeof(item)>>(item);
                 for (std::size_t i = 0; i < sizeof(value); ++i) {
                     m_data[m_position + i] = value[i];
@@ -1057,7 +1050,7 @@ protected:
                 auto count = item.count();
                 for (std::size_t index = 0; index < count; ++index) {
                     auto value = std::bit_cast<
-                        std::array<std::remove_const_t<value_type>,
+                        std::array<std::remove_const_t<byte_type>,
                                    sizeof(typename type::value_type)>>(
                         item.data()[index]);
                     for (std::size_t i = 0;
@@ -1289,7 +1282,7 @@ public:
     template <typename, concepts::variant>
     friend struct known_dynamic_id_variant;
 
-    using value_type =
+    using byte_type =
         std::conditional_t<std::is_const_v<std::remove_reference_t<
                                decltype(std::declval<ByteView>()[1])>>,
                            std::add_const_t<typename ByteView::value_type>,
@@ -1335,12 +1328,6 @@ public:
         return m_position;
     }
 
-    constexpr auto remaining_data()
-    {
-        return std::span{m_data.data() + m_position,
-                         m_data.size() - m_position};
-    }
-
     constexpr void reset(std::size_t position = 0)
     {
         m_position = position;
@@ -1382,10 +1369,10 @@ private:
                 return std::errc::result_out_of_range;
             }
             if (std::is_constant_evaluated()) {
-                std::array<std::remove_const_t<value_type>, sizeof(item)>
+                std::array<std::remove_const_t<byte_type>, sizeof(item)>
                     value;
                 for (std::size_t i = 0; i < sizeof(value); ++i) {
-                    value[i] = value_type(m_data[m_position + i]);
+                    value[i] = byte_type(m_data[m_position + i]);
                 }
                 item = std::bit_cast<type>(value);
             } else {
@@ -1407,13 +1394,13 @@ private:
             if (std::is_constant_evaluated()) {
                 std::size_t count = item.count();
                 for (std::size_t index = 0; index < count; ++index) {
-                    std::array<std::remove_const_t<value_type>,
+                    std::array<std::remove_const_t<byte_type>,
                                sizeof(typename type::value_type)>
                         value;
                     for (std::size_t i = 0;
                          i < sizeof(typename type::value_type);
                          ++i) {
-                        value[i] = value_type(
+                        value[i] = byte_type(
                             m_data[m_position +
                                    index *
                                        sizeof(typename type::value_type) +
@@ -1791,7 +1778,7 @@ private:
     using view_type =
         std::conditional_t<is_resizable,
                            ByteView &,
-                           std::span<value_type>>;
+                           std::span<byte_type>>;
 
     view_type m_data{};
     std::size_t m_position{};
@@ -2435,19 +2422,16 @@ struct bind_opaque
                 return (context.*Function)(in);
             } else if constexpr (requires { (context.*Function)(out); }) {
                 return (context.*Function)(out);
-            } else if constexpr (requires(decltype(in.data()) data) {
-                                     (context.*Function)(data);
-                                 }) {
-                struct _
-                {
-                    decltype(in) archive;
-                    decltype(in.remaining_data()) remaining_data;
-                    ~_()
-                    {
-                        archive.position() += remaining_data.size();
-                    }
-                } _{in, in.remaining_data()};
-                return (context.*Function)(_.remaining_data);
+            } else if constexpr (
+                requires(std::span<const typename std::remove_cvref_t<
+                             decltype(in)>::byte_type> data) {
+                    (context.*Function)(data);
+                }) {
+                unsized_t<std::span<
+                    const typename std::remove_cvref_t<decltype(in)>::byte_type>>
+                    data;
+                (void) in(data);
+                return (context.*Function)(data);
             } else {
                 return (context.*Function)();
             }
@@ -2458,19 +2442,16 @@ struct bind_opaque
                 return Function(in);
             } else if constexpr (requires { Function(out); }) {
                 return Function(out);
-            } else if constexpr (requires(decltype(in.data()) data) {
-                                     Function(data);
-                                 }) {
-                struct _
-                {
-                    decltype(in) archive;
-                    decltype(in.remaining_data()) remaining_data;
-                    ~_()
-                    {
-                        archive.position() += remaining_data.size();
-                    }
-                } _{in, in.remaining_data()};
-                return Function(_.remaining_data);
+            } else if constexpr (
+                requires(std::span<const typename std::remove_cvref_t<
+                             decltype(in)>::byte_type> data) {
+                    Function(data);
+                }) {
+                unsized_t<std::span<const typename std::remove_cvref_t<
+                    decltype(in)>::byte_type>>
+                    data;
+                (void) in(data);
+                return Function(data);
             } else {
                 return Function();
             }
