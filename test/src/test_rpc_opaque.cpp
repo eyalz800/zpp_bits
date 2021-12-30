@@ -17,6 +17,18 @@ int foo(std::span<const std::byte> input)
     return 1338;
 }
 
+int foo_partial(std::span<const std::byte> & input)
+{
+    int i = 0;
+    zpp::bits::in in{input};
+    in(i).or_throw();
+
+    EXPECT_EQ(i, 1337);
+
+    input = in.processed_data();
+    return 1338;
+}
+
 int bar(int i, std::string s)
 {
     EXPECT_EQ(i, 1337);
@@ -86,6 +98,28 @@ TEST(test_rpc, opaque_member_function)
     server.serve().or_throw();
 
     EXPECT_EQ((client.response<"foo"_sha256_int>().or_throw()), 1340);
+}
+
+TEST(test_rpc_opaque, opaque_function_partial)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+
+    using rpc = zpp::bits::rpc<
+        zpp::bits::bind_opaque<foo_partial, "foo_partial"_sha256_int>,
+        zpp::bits::bind<bar, "bar"_sha256_int>
+    >;
+
+    auto [client, server] = rpc::client_server(in, out);
+    client.request<"foo_partial"_sha256_int>(1337, "hello"s).or_throw();
+    server.serve().or_throw();
+
+    EXPECT_EQ(in.position(), (2 * sizeof(int)));
+
+    std::string s;
+    in(s).or_throw();
+    EXPECT_EQ(s, "hello"s);
+
+    EXPECT_EQ((client.response<"foo_partial"_sha256_int>().or_throw()), 1338);
 }
 
 #if __has_include("zpp_throwing.h")
