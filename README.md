@@ -28,7 +28,17 @@ polymorphic types with fixed 8 bytes of sha1 serialization id.
 
 Contents
 --------
-* For most types, enabling serialization is *just one line*. Here is an example of a `person` class with name
+* For many types, enabling serialization is zero lines, these types are required to be of aggregate type.
+Here is an example of a `person` class with name and age:
+```cpp
+struct person
+{
+    std::string name;
+    int age{};
+};
+```
+
+* For most other types, the, enabling serialization is *just one line*. Here is an example of a `person` class with name
 and age:
 ```cpp
 struct person
@@ -137,12 +147,15 @@ int main()
 ```
 
 * In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and `unevaluated lambda expression`. It means
-that even the number of members can be detected automatically in most cases. To opt-in,
+that even the number of members can be detected automatically in cases where all members are in the same struct, regardless
+of the type being an aggregate or not. To opt-in,
 define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`.
 ```cpp
 // Members are detected automatically, no additional change needed.
 struct person
 {
+	person(auto && ...){/*...*/} // Make non-aggregate.
+
     std::string name;
     int age{};
 };
