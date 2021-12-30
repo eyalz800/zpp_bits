@@ -5,7 +5,7 @@ TEST(optional, valid)
     auto [data, in, out] = zpp::bits::data_in_out();
     out(std::optional{std::vector{1,2,3,4}}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "01"
               "04000000"
               "01000000"
@@ -25,7 +25,7 @@ TEST(optional, const_valid)
     const std::optional o{std::vector<int>{1,2,3,4}};
     out(o).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "01"
               "04000000"
               "01000000"
@@ -44,7 +44,7 @@ TEST(optional, nullopt)
     auto [data, in, out] = zpp::bits::data_in_out();
     out(std::optional<std::vector<int>>{}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "00");
 
     std::optional<std::vector<int>> o = std::vector{1, 2, 3};

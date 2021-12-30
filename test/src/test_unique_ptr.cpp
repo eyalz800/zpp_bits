@@ -6,7 +6,7 @@ TEST(unique_ptr, regular)
     out(std::make_unique<std::vector<int>>(std::vector{1, 2, 3, 4}))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "02000000"

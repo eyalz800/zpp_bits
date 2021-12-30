@@ -552,6 +552,7 @@ using namespace zpp::bits::literals;
 "hello"_sha256 // Make a sha256 binary data literal.
 "hello"_sha1_int // Make a sha1 integer from the first hash bytes.
 "hello"_sha256_int // Make a sha256 integer from the first hash bytes.
+"01020304"_decode_hex // Decode a hex string into bytes literal.
 ```
 
 * You can apply input archive contents to a function directly, using

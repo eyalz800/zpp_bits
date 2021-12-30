@@ -6,7 +6,7 @@ TEST(data_sources, vector_bytes)
     auto [in, out] = zpp::bits::in_out(data);
     out(std::vector{1,2,3,4}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "02000000"
@@ -25,7 +25,7 @@ TEST(data_sources, vector_unsigned_char)
     auto [in, out] = zpp::bits::in_out(data);
     out(std::vector{1,2,3,4}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "02000000"
@@ -44,7 +44,7 @@ TEST(data_sources, vector_char)
     auto [in, out] = zpp::bits::in_out(data);
     out(std::vector{1,2,3,4}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "02000000"
@@ -63,7 +63,7 @@ TEST(data_sources, string)
     auto [in, out] = zpp::bits::in_out(data);
     out(std::vector{1,2,3,4}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "02000000"
@@ -82,7 +82,7 @@ TEST(data_sources, stdarray)
     auto [in, out] = zpp::bits::in_out(data);
     out(std::vector{1,2,3,4}).or_throw();
 
-    EXPECT_EQ(hexlify(std::span{data.data(), out.position()}),
+    EXPECT_EQ(encode_hex(std::span{data.data(), out.position()}),
               "04000000"
               "01000000"
               "02000000"
@@ -102,7 +102,7 @@ TEST(data_sources, array)
     auto [in, out] = zpp::bits::in_out(data);
     out(std::vector{1,2,3,4}).or_throw();
 
-    EXPECT_EQ(hexlify(std::span{std::data(data), out.position()}),
+    EXPECT_EQ(encode_hex(std::span{std::data(data), out.position()}),
               "04000000"
               "01000000"
               "02000000"
@@ -121,7 +121,7 @@ TEST(data_sources, array_over_span)
     auto [in, out] = zpp::bits::in_out(std::span(data));
     out(std::vector{1,2,3,4}).or_throw();
 
-    EXPECT_EQ(hexlify(std::span{data, out.position()}),
+    EXPECT_EQ(encode_hex(std::span{data, out.position()}),
               "04000000"
               "01000000"
               "02000000"

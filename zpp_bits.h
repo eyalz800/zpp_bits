@@ -3361,7 +3361,7 @@ constexpr auto operator""_b()
 }
 
 template <string_literal String>
-constexpr auto operator""_unhexlify()
+constexpr auto operator""_decode_hex()
 {
     constexpr auto tolower = [](auto c) {
         if ('A' <= c && c <= 'Z') {

@@ -2,7 +2,7 @@
 #include "gtest/gtest.h"
 #include "zpp_bits.h"
 
-inline std::string hexlify(auto && view)
+inline std::string encode_hex(auto && view)
 {
     auto to_hex = [](auto value) constexpr {
         if (value < 0xa) {

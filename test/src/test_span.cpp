@@ -9,7 +9,7 @@ TEST(span, integer)
     std::vector o{1,2,3,4};
     out(std::span{o}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "02000000"
@@ -30,7 +30,7 @@ TEST(span, const_integer)
     const std::span o{v};
     out(o).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "02000000"
@@ -50,7 +50,7 @@ TEST(span, string)
     std::vector o{"1"s,"2"s,"3"s,"4"s};
     out(std::span{o}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "31"
@@ -74,7 +74,7 @@ TEST(span, string_input_out_of_range)
     std::vector o{"1"s,"2"s,"3"s,"4"s};
     out(std::span{o}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "31"
@@ -106,7 +106,7 @@ TEST(span, const_string)
     const std::vector<std::string> o{"1"s, "2"s, "3"s, "4"s};
     out(std::span{o}).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "04000000"
               "01000000"
               "31"

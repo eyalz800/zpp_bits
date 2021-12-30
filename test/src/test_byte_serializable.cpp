@@ -95,7 +95,8 @@ constexpr void serialize(auto & archive,
 
 static_assert(zpp::bits::concepts::byte_serializable<int[5]>);
 static_assert(zpp::bits::concepts::byte_serializable<members_integers>);
-static_assert(zpp::bits::concepts::byte_serializable<members_integers_outside>);
+static_assert(
+    zpp::bits::concepts::byte_serializable<members_integers_outside>);
 static_assert(!zpp::bits::concepts::byte_serializable<ref>);
 static_assert(!zpp::bits::concepts::byte_serializable<pointer>);
 static_assert(!zpp::bits::concepts::byte_serializable<vector>);
@@ -115,16 +116,24 @@ auto serialize(const integers &) -> zpp::bits::members<2>;
 
 static_assert(zpp::bits::concepts::byte_serializable<array>);
 static_assert(zpp::bits::concepts::byte_serializable<stdarray>);
-static_assert(!zpp::bits::concepts::serialize_as_bytes<zpp::bits::out<>, stdarray_custom>);
-static_assert(!zpp::bits::concepts::serialize_as_bytes<zpp::bits::in<>, stdarray_custom>);
-static_assert(!zpp::bits::concepts::serialize_as_bytes<zpp::bits::out<>, stdarray_custom_outside>);
-static_assert(!zpp::bits::concepts::serialize_as_bytes<zpp::bits::in<>, stdarray_custom_outside>);
+static_assert(!zpp::bits::concepts::serialize_as_bytes<zpp::bits::out<>,
+                                                       stdarray_custom>);
+static_assert(!zpp::bits::concepts::serialize_as_bytes<zpp::bits::in<>,
+                                                       stdarray_custom>);
+static_assert(
+    !zpp::bits::concepts::serialize_as_bytes<zpp::bits::out<>,
+                                             stdarray_custom_outside>);
+static_assert(
+    !zpp::bits::concepts::serialize_as_bytes<zpp::bits::in<>,
+                                             stdarray_custom_outside>);
 static_assert(zpp::bits::concepts::byte_serializable<stdarray_array>);
 static_assert(zpp::bits::concepts::byte_serializable<integers>);
 
 #if ZPP_BITS_AUTODETECT_MEMBERS_MODE > 0
-static_assert(zpp::bits::concepts::byte_serializable<members_integers_auto>);
-static_assert(zpp::bits::concepts::byte_serializable<members_integers_outside_auto>);
+static_assert(
+    zpp::bits::concepts::byte_serializable<members_integers_auto>);
+static_assert(
+    zpp::bits::concepts::byte_serializable<members_integers_outside_auto>);
 #endif
 
 struct requires_padding
@@ -137,14 +146,15 @@ TEST(byte_serializable, requires_padding)
 {
     auto [data, in, out] = zpp::bits::data_in_out();
 
-    static_assert(!zpp::bits::concepts::byte_serializable<requires_padding>);
+    static_assert(
+        !zpp::bits::concepts::byte_serializable<requires_padding>);
     static_assert(sizeof(requires_padding) > 5);
 
 #if ZPP_BITS_AUTODETECT_MEMBERS_MODE > 0
     out(requires_padding{std::byte{0x25}, 0x1337}).or_throw();
 
     EXPECT_EQ(data.size(), std::size_t{5});
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "25"
               "37130000");
 
@@ -219,7 +229,7 @@ TEST(byte_serializable, inaccessible_friend_requires_padding)
         .or_throw();
 
     EXPECT_EQ(data.size(), std::size_t{5});
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "25"
               "37130000");
 
@@ -263,7 +273,7 @@ TEST(byte_serializable, inaccessible_members_requires_padding)
         .or_throw();
 
     EXPECT_EQ(data.size(), std::size_t{5});
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "25"
               "37130000");
 
@@ -294,7 +304,7 @@ TEST(byte_serializable, members_requires_padding)
     out(members_requires_padding{std::byte{0x25}, 0x1337}).or_throw();
 
     EXPECT_EQ(data.size(), std::size_t{5});
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "25"
               "37130000");
 
@@ -327,7 +337,7 @@ TEST(byte_serializable, members_requires_padding_outside)
         .or_throw();
 
     EXPECT_EQ(data.size(), std::size_t{5});
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "25"
               "37130000");
 
@@ -358,7 +368,7 @@ TEST(byte_serializable, members_requires_padding_auto)
     out(members_requires_padding_auto{std::byte{0x25}, 0x1337}).or_throw();
 
     EXPECT_EQ(data.size(), std::size_t{5});
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "25"
               "37130000");
 
@@ -391,7 +401,7 @@ TEST(byte_serializable, members_requires_padding_outside_auto)
         .or_throw();
 
     EXPECT_EQ(data.size(), std::size_t{5});
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "25"
               "37130000");
 

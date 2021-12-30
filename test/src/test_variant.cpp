@@ -10,7 +10,7 @@ TEST(variant, int)
     auto [data, in, out] = zpp::bits::data_in_out();
     out(std::variant<int, std::string>(0x1337)).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "00"
               "37130000");
 
@@ -26,7 +26,7 @@ TEST(variant, string)
     auto [data, in, out] = zpp::bits::data_in_out();
     out(std::variant<int, std::string>("1234")).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "01"
               "04000000"
               "31323334");
@@ -80,11 +80,11 @@ TEST(variant, string_versioning_v1)
     out(std::variant<v1::person, v2::person>(v1::person{"Person1", 25}))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<"v1::person"_s,
-                                          "Person1"_s.size(),
-                                          "Person1"_s,
-                                          25>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<"v1::person"_s,
+                                             "Person1"_s.size(),
+                                             "Person1"_s,
+                                             25>()));
 
     std::variant<v1::person, v2::person> v;
     in(v).or_throw();
@@ -106,13 +106,13 @@ TEST(variant, string_versioning_v2)
             v2::person{"Person2", 35, "Basketball"}))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<"v2::person"_s,
-                                          "Person2"_s.size(),
-                                          "Person2"_s,
-                                          35,
-                                          "Basketball"_s.size(),
-                                          "Basketball"_s>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<"v2::person"_s,
+                                             "Person2"_s.size(),
+                                             "Person2"_s,
+                                             35,
+                                             "Basketball"_s.size(),
+                                             "Basketball"_s>()));
 
     std::variant<v1::person, v2::person> v;
     in(v).or_throw();
@@ -168,11 +168,11 @@ TEST(variant, string_versioning_outside_v1)
     out(std::variant<v1::person, v2::person>(v1::person{"Person1", 25}))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<"v1::person"_s,
-                                          "Person1"_s.size(),
-                                          "Person1"_s,
-                                          25>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<"v1::person"_s,
+                                             "Person1"_s.size(),
+                                             "Person1"_s,
+                                             25>()));
 
     std::variant<v1::person, v2::person> v;
     in(v).or_throw();
@@ -194,13 +194,13 @@ TEST(variant, string_versioning_outside_v2)
             v2::person{"Person2", 35, "Basketball"}))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<"v2::person"_s,
-                                          "Person2"_s.size(),
-                                          "Person2"_s,
-                                          35,
-                                          "Basketball"_s.size(),
-                                          "Basketball"_s>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<"v2::person"_s,
+                                             "Person2"_s.size(),
+                                             "Person2"_s,
+                                             35,
+                                             "Basketball"_s.size(),
+                                             "Basketball"_s>()));
 
     std::variant<v1::person, v2::person> v;
     in(v).or_throw();
@@ -257,8 +257,8 @@ TEST(variant, int_versioning_v1)
         .or_throw();
 
     EXPECT_EQ(
-        hexlify(data),
-        hexlify(
+        encode_hex(data),
+        encode_hex(
             zpp::bits::
                 to_bytes<1337, "Person1"_s.size(), "Person1"_s, 25>()));
 
@@ -282,13 +282,13 @@ TEST(variant, int_versioning_v2)
             v2::person{"Person2", 35, "Basketball"}))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<1338,
-                                          "Person2"_s.size(),
-                                          "Person2"_s,
-                                          35,
-                                          "Basketball"_s.size(),
-                                          "Basketball"_s>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<1338,
+                                             "Person2"_s.size(),
+                                             "Person2"_s,
+                                             35,
+                                             "Basketball"_s.size(),
+                                             "Basketball"_s>()));
 
     std::variant<v1::person, v2::person> v;
     in(v).or_throw();
@@ -345,8 +345,8 @@ TEST(variant, int_versioning_outside_v1)
         .or_throw();
 
     EXPECT_EQ(
-        hexlify(data),
-        hexlify(
+        encode_hex(data),
+        encode_hex(
             zpp::bits::
                 to_bytes<1337, "Person1"_s.size(), "Person1"_s, 25>()));
 
@@ -370,13 +370,13 @@ TEST(variant, int_versioning_outside_v2)
             v2::person{"Person2", 35, "Basketball"}))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<1338,
-                                          "Person2"_s.size(),
-                                          "Person2"_s,
-                                          35,
-                                          "Basketball"_s.size(),
-                                          "Basketball"_s>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<1338,
+                                             "Person2"_s.size(),
+                                             "Person2"_s,
+                                             35,
+                                             "Basketball"_s.size(),
+                                             "Basketball"_s>()));
 
     std::variant<v1::person, v2::person> v;
     in(v).or_throw();
@@ -436,12 +436,12 @@ TEST(hash, hash_variant_v1)
     out(std::variant<v1::person, v2::person>(v1::person{"Person1", 25}))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<zpp::bits::slice<0, 4>(
-                                              "v1::person"_sha256),
-                                          "Person1"_s.size(),
-                                          "Person1"_s,
-                                          25>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<zpp::bits::slice<0, 4>(
+                                                 "v1::person"_sha256),
+                                             "Person1"_s.size(),
+                                             "Person1"_s,
+                                             25>()));
 
     std::variant<v1::person, v2::person> v;
     in(v).or_throw();
@@ -463,14 +463,14 @@ TEST(hash, hash_variant_v2)
             v2::person{"Person2", 35, "Basketball"}))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<zpp::bits::slice<0, 4>(
-                                              "v2::person"_sha256),
-                                          "Person2"_s.size(),
-                                          "Person2"_s,
-                                          35,
-                                          "Basketball"_s.size(),
-                                          "Basketball"_s>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<zpp::bits::slice<0, 4>(
+                                                 "v2::person"_sha256),
+                                             "Person2"_s.size(),
+                                             "Person2"_s,
+                                             35,
+                                             "Basketball"_s.size(),
+                                             "Basketball"_s>()));
 
     std::variant<v1::person, v2::person> v;
     in(v).or_throw();
@@ -488,15 +488,14 @@ TEST(hash, hash_variant_v1_only)
 {
     using namespace hash;
     auto [data, in, out] = zpp::bits::data_in_out();
-    out(std::variant<v1::person>(v1::person{"Person1", 25}))
-        .or_throw();
+    out(std::variant<v1::person>(v1::person{"Person1", 25})).or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<zpp::bits::slice<0, 4>(
-                                              "v1::person"_sha256),
-                                          "Person1"_s.size(),
-                                          "Person1"_s,
-                                          25>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<zpp::bits::slice<0, 4>(
+                                                 "v1::person"_sha256),
+                                             "Person1"_s.size(),
+                                             "Person1"_s,
+                                             25>()));
 
     std::variant<v1::person> v;
     in(v).or_throw();
@@ -518,10 +517,10 @@ TEST(hash, hash_variant_v1_only_known)
             std::variant<v1::person>(v1::person{"Person1", 25})))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<"Person1"_s.size(),
-                                          "Person1"_s,
-                                          25>()));
+    EXPECT_EQ(
+        encode_hex(data),
+        encode_hex(
+            zpp::bits::to_bytes<"Person1"_s.size(), "Person1"_s, 25>()));
 
     std::variant<v1::person> v;
     in(zpp::bits::known_id<"v1::person"_sha256, 4>(v)).or_throw();
@@ -544,12 +543,12 @@ TEST(hash, hash_variant_v2_known)
                 v2::person{"Person2", 35, "Basketball"})))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<"Person2"_s.size(),
-                                          "Person2"_s,
-                                          35,
-                                          "Basketball"_s.size(),
-                                          "Basketball"_s>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<"Person2"_s.size(),
+                                             "Person2"_s,
+                                             35,
+                                             "Basketball"_s.size(),
+                                             "Basketball"_s>()));
 
     std::variant<v1::person, v2::person> v;
     in(zpp::bits::known_id<"v2::person"_sha256, 4>(v)).or_throw();
@@ -572,12 +571,12 @@ TEST(hash, hash_variant_v2_known_dynamic)
                 v2::person{"Person2", 35, "Basketball"})))
         .or_throw();
 
-    EXPECT_EQ(hexlify(data),
-              hexlify(zpp::bits::to_bytes<"Person2"_s.size(),
-                                          "Person2"_s,
-                                          35,
-                                          "Basketball"_s.size(),
-                                          "Basketball"_s>()));
+    EXPECT_EQ(encode_hex(data),
+              encode_hex(zpp::bits::to_bytes<"Person2"_s.size(),
+                                             "Person2"_s,
+                                             35,
+                                             "Basketball"_s.size(),
+                                             "Basketball"_s>()));
 
     std::variant<v1::person, v2::person> v;
     in(zpp::bits::known_id(zpp::bits::id_v<"v2::person"_sha256, 4>, v))

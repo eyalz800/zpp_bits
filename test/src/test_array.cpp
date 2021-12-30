@@ -6,7 +6,7 @@ TEST(array, integer)
     int a1[] = {1,2,3,4};
     out(a1).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "01000000"
               "02000000"
               "03000000"
@@ -26,7 +26,7 @@ TEST(array, const_integer)
     const int a1[] = {1,2,3,4};
     out(a1).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "01000000"
               "02000000"
               "03000000"
@@ -47,7 +47,7 @@ TEST(array, string)
     std::string a1[] = {"1"s,"2"s,"3"s,"4"s};
     out(a1).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "01000000"
               "31"
               "01000000"
@@ -72,7 +72,7 @@ TEST(array, const_string)
     const std::string a1[] = {"1"s,"2"s,"3"s,"4"s};
     out(a1).or_throw();
 
-    EXPECT_EQ(hexlify(data),
+    EXPECT_EQ(encode_hex(data),
               "01000000"
               "31"
               "01000000"
