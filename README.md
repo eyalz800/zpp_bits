@@ -38,21 +38,6 @@ struct person
 };
 ```
 
-* For most other types, the, enabling serialization is *just one line*. Here is an example of a `person` class with name
-and age:
-```cpp
-struct person
-{
-    // Add this line to your class with the number of members:
-    using serialize = zpp::bits::members<2>; // Two members
-
-    std::string name;
-    int age{};
-};
-```
-Most of the time types we serialize can work with structured binding, and this library takes advantage
-of that, but you need to provide the number of members in your class for this to work using the method above.
-
 * Example how to serialize the person into and from a vector of bytes:
 ```cpp
 // The `data_in_out` utility function creates a vector of bytes, the input and output archives
@@ -146,15 +131,31 @@ int main()
 }
 ```
 
+* For most non-aggregate types, enabling serialization is a one liner. Here is an example of a non-aggregate
+`person` class:
+```cpp
+struct person
+{
+    // Add this line to your class with the number of members:
+    using serialize = zpp::bits::members<2>; // Two members
+
+    person(auto && ...){/*...*/} // Make non-aggregate.
+
+    std::string name;
+    int age{};
+};
+```
+Most of the time types we serialize can work with structured binding, and this library takes advantage
+of that, but you need to provide the number of members in your class for this to work using the method above.
+
 * In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and `unevaluated lambda expression`. It means
-that even the number of members can be detected automatically in cases where all members are in the same struct, regardless
-of the type being an aggregate or not. To opt-in,
-define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`.
+that even with aggregate types the number of members can be detected automatically in cases where all members are in the same struct.
+To opt-in, define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`.
 ```cpp
 // Members are detected automatically, no additional change needed.
 struct person
 {
-	person(auto && ...){/*...*/} // Make non-aggregate.
+    person(auto && ...){/*...*/} // Make non-aggregate.
 
     std::string name;
     int age{};
