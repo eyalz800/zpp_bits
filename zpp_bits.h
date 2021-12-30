@@ -3402,6 +3402,102 @@ constexpr auto operator""_sha256_int()
 }
 } // namespace string_literals
 } // namespace literals
+
+template <typename... Arguments>
+using vector1b = sized_t<std::vector<Arguments...>, unsigned char>;
+template <typename... Arguments>
+using vector2b = sized_t<std::vector<Arguments...>, std::uint16_t>;
+template <typename... Arguments>
+using vector4b = sized_t<std::vector<Arguments...>, std::uint32_t>;
+template <typename... Arguments>
+using vector8b = sized_t<std::vector<Arguments...>, std::uint64_t>;
+template <typename... Arguments>
+using static_vector = unsized_t<std::vector<Arguments...>>;
+template <typename... Arguments>
+using native_vector = sized_t<std::vector<Arguments...>, typename std::vector<Arguments...>::size_type>;
+
+template <typename... Arguments>
+using span1b = sized_t<std::span<Arguments...>, unsigned char>;
+template <typename... Arguments>
+using span2b = sized_t<std::span<Arguments...>, std::uint16_t>;
+template <typename... Arguments>
+using span4b = sized_t<std::span<Arguments...>, std::uint32_t>;
+template <typename... Arguments>
+using span8b = sized_t<std::span<Arguments...>, std::uint64_t>;
+template <typename... Arguments>
+using static_span = unsized_t<std::span<Arguments...>>;
+template <typename... Arguments>
+using native_span = sized_t<std::span<Arguments...>, typename std::span<Arguments...>::size_type>;
+
+using string1b = sized_t<std::string, unsigned char>;
+using string2b = sized_t<std::string, std::uint16_t>;
+using string4b = sized_t<std::string, std::uint32_t>;
+using string8b = sized_t<std::string, std::uint64_t>;
+using static_string = unsized_t<std::string>;
+using native_string = sized_t<std::string, std::string::size_type>;
+
+using string_view1b = sized_t<std::string_view, unsigned char>;
+using string_view2b = sized_t<std::string_view, std::uint16_t>;
+using string_view4b = sized_t<std::string_view, std::uint32_t>;
+using string_view8b = sized_t<std::string_view, std::uint64_t>;
+using static_string_view = unsized_t<std::string_view>;
+using native_string_view = sized_t<std::string_view, std::string_view::size_type>;
+
+using wstring1b = sized_t<std::wstring, unsigned char>;
+using wstring2b = sized_t<std::wstring, std::uint16_t>;
+using wstring4b = sized_t<std::wstring, std::uint32_t>;
+using wstring8b = sized_t<std::wstring, std::uint64_t>;
+using static_wstring = unsized_t<std::wstring>;
+using native_wstring = sized_t<std::wstring, std::wstring::size_type>;
+
+using wstring_view1b = sized_t<std::wstring_view, unsigned char>;
+using wstring_view2b = sized_t<std::wstring_view, std::uint16_t>;
+using wstring_view4b = sized_t<std::wstring_view, std::uint32_t>;
+using wstring_view8b = sized_t<std::wstring_view, std::uint64_t>;
+using static_wstring_view = unsized_t<std::wstring_view>;
+using native_wstring_view = sized_t<std::wstring_view, std::wstring_view::size_type>;
+
+using u8string1b = sized_t<std::u8string, unsigned char>;
+using u8string2b = sized_t<std::u8string, std::uint16_t>;
+using u8string4b = sized_t<std::u8string, std::uint32_t>;
+using u8string8b = sized_t<std::u8string, std::uint64_t>;
+using static_u8string = unsized_t<std::u8string>;
+using native_u8string = sized_t<std::u8string, std::u8string::size_type>;
+
+using u8string_view1b = sized_t<std::u8string_view, unsigned char>;
+using u8string_view2b = sized_t<std::u8string_view, std::uint16_t>;
+using u8string_view4b = sized_t<std::u8string_view, std::uint32_t>;
+using u8string_view8b = sized_t<std::u8string_view, std::uint64_t>;
+using static_u8string_view = unsized_t<std::u8string_view>;
+using native_u8string_view = sized_t<std::u8string_view, std::u8string_view::size_type>;
+
+using u16string1b = sized_t<std::u16string, unsigned char>;
+using u16string2b = sized_t<std::u16string, std::uint16_t>;
+using u16string4b = sized_t<std::u16string, std::uint32_t>;
+using u16string8b = sized_t<std::u16string, std::uint64_t>;
+using static_u16string = unsized_t<std::u16string>;
+using native_u16string = sized_t<std::u16string, std::u16string::size_type>;
+
+using u16string_view1b = sized_t<std::u16string_view, unsigned char>;
+using u16string_view2b = sized_t<std::u16string_view, std::uint16_t>;
+using u16string_view4b = sized_t<std::u16string_view, std::uint32_t>;
+using u16string_view8b = sized_t<std::u16string_view, std::uint64_t>;
+using static_u16string_view = unsized_t<std::u16string_view>;
+using native_u16string_view = sized_t<std::u16string_view, std::u16string_view::size_type>;
+
+using u32string1b = sized_t<std::u32string, unsigned char>;
+using u32string2b = sized_t<std::u32string, std::uint16_t>;
+using u32string4b = sized_t<std::u32string, std::uint32_t>;
+using u32string8b = sized_t<std::u32string, std::uint64_t>;
+using static_u32string = unsized_t<std::u32string>;
+using native_u32string = sized_t<std::u32string, std::u32string::size_type>;
+
+using u32string_view1b = sized_t<std::u32string_view, unsigned char>;
+using u32string_view2b = sized_t<std::u32string_view, std::uint16_t>;
+using u32string_view4b = sized_t<std::u32string_view, std::uint32_t>;
+using u32string_view8b = sized_t<std::u32string_view, std::uint64_t>;
+using static_u32string_view = unsized_t<std::u32string_view>;
+using native_u32string_view = sized_t<std::u32string_view, std::u32string_view::size_type>;
 } // namespace zpp::bits
 
 #endif // ZPP_BITS_H

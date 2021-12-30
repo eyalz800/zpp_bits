@@ -273,9 +273,9 @@ std::vector v = {1,2,3,4};
 out(v);
 in(v);
 ```
-The reason why the default size type is of 4 bytes (i.e `std::uint32_t`) is that most programs
-almost never reach a case of a container being more than ~4 billion items, and it may be unjust to
-pay the price of 8 bytes size by default.
+The reason why the default size type is of 4 bytes (i.e `std::uint32_t`) is for portability between
+different architectures, as well as most programs almost never reach a case of a container being
+more than 2^32 items, and it may be unjust to pay the price of 8 bytes size by default.
 
 * For specific size types that are not 4 bytes, use `zpp::bits::sized`/`zpp::bits::sized_t` like so:
 ```cpp
@@ -306,7 +306,25 @@ out(v);
 in(v);
 ```
 
-* Serialization of fixed size types such as arrays, `std::array`s, `std::tuple`s don't include
+For where it is common, there are alias declarations for sized / unsized versions of types, for example,
+here are `vector` and `span`, others such as `string`, `string_view`, etc are using the same pattern.
+```cpp
+zpp::bits::vector1b<T>; // vector with 1 byte size.
+zpp::bits::vector2b<T>; // vector with 2 byte size.
+zpp::bits::vector4b<T>; // vector with 4 byte size == default std::vector configuration
+zpp::bits::vector8b<T>; // vector with 8 byte size.
+zpp::bits::static_vector<T>; // unsized vector
+zpp::bits::native_vector<T>; // vector with native (size_type) byte size.
+
+zpp::bits::span1b<T>; // span with 1 byte size.
+zpp::bits::span2b<T>; // span with 2 byte size.
+zpp::bits::span4b<T>; // span with 4 byte size == default std::span configuration
+zpp::bits::span8b<T>; // span with 8 byte size.
+zpp::bits::static_span<T>; // unsized span
+zpp::bits::native_span<T>; // span with native (size_type) byte size.
+```
+
+Serialization of fixed size types such as arrays, `std::array`s, `std::tuple`s don't include
 any overhead except the elements followed by each other.
 
 * Serialization using argument dependent lookup is also possible, using both
