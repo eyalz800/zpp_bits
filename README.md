@@ -532,14 +532,26 @@ have a particular ID upon deserialize, you may do it using `zpp::bits::known_id`
 std::variant<v1::person, v2::person> v;
 
  // Id assumed to be v2::person, and is not serialized / deserialized.
-out(zpp::bits::known_id<"v2::person"_sha256, 4>(v));
-in(zpp::bits::known_id<"v2::person"_sha256, 4>(v));
+out(zpp::bits::known_id<"v2::person"_sha256_int>(v));
+in(zpp::bits::known_id<"v2::person"_sha256_int>(v));
 
 // When deserializing you can pass the id as function parameter, to be able
 // to use outside of compile time context. `id_v` stands for "id value".
 // In our case 4 bytes translates to a plain std::uint32_t, so any dynamic
 // integer could fit as the first parameter to `known_id` below.
-in(zpp::bits::known_id(zpp::bits::id_v<"v2::person"_sha256, 4>, v));
+in(zpp::bits::known_id(zpp::bits::id_v<"v2::person"_sha256_int>, v));
+```
+
+* Description of helper literals in the library:
+```cpp
+using namespace zpp::bits::literals;
+
+"hello"_s // Make a string literal.
+"hello"_b // Make a binary data literal.
+"hello"_sha1 // Make a sha1 binary data literal.
+"hello"_sha256 // Make a sha256 binary data literal.
+"hello"_sha1_int // Make a sha1 integer from the first hash bytes.
+"hello"_sha256_int // Make a sha256 integer from the first hash bytes.
 ```
 
 * You can apply input archive contents to a function directly, using
