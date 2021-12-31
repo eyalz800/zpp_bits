@@ -123,7 +123,7 @@ struct access
         auto && object,
         auto && visitor) requires(0 <=
                                   number_of_members<decltype(object)>()) &&
-        (number_of_members<decltype(object)>() < max_visit_members)
+        (number_of_members<decltype(object)>() <= max_visit_members)
     {
         constexpr auto count = number_of_members<decltype(object)>();
 
@@ -137,7 +137,7 @@ struct access
     template <typename Type>
         constexpr static decltype(auto)
         visit_members_types(auto && visitor) requires(0 <= number_of_members<Type>()) &&
-        (number_of_members<Type>() < max_visit_members)
+        (number_of_members<Type>() <= max_visit_members)
 
     {
         using type = std::remove_cvref_t<Type>;
