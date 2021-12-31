@@ -1951,7 +1951,7 @@ constexpr auto to_bytes_one()
         return string_literal<std::byte, 0>{};
     } else {
         std::array<std::byte, size> data;
-        (void) out{data}(Object);
+        out{data}(Object).or_throw();
         return data;
     }
 }
@@ -1964,7 +1964,7 @@ constexpr auto join()
         return string_literal<std::byte, 0>{};
     } else {
         std::array<std::byte, size> data;
-        (void) zpp::bits::out{data}(Data...);
+        zpp::bits::out{data}(Data...).or_throw();
         return data;
     }
 }
@@ -1996,7 +1996,7 @@ constexpr auto from_bytes()
     static_assert(success(in{Data}(Type{})));
 
     Type object;
-    (void) in{Data}(object);
+    in{Data}(object).or_throw();
     return object;
 }
 
@@ -2006,7 +2006,7 @@ constexpr auto from_bytes() requires (sizeof...(Types) > 1)
     static_assert(success(in{Data}(std::tuple{Types{}...})));
 
     std::tuple<Types...> object;
-    (void) in{Data}(object);
+    in{Data}(object).or_throw();
     return object;
 }
 
@@ -3292,10 +3292,10 @@ constexpr auto sha1()
     }
 
     std::array<std::byte, 20> digest_data;
-    (void)out{digest_data}(h0, h1, h2, h3, h4);
+    out{digest_data}(h0, h1, h2, h3, h4).or_throw();
 
     Digest digest;
-    (void)in{digest_data}(digest);
+    in{digest_data}(digest).or_throw();
     return digest;
 }
 
@@ -3420,10 +3420,10 @@ constexpr auto sha256()
     }
 
     std::array<std::byte, 32> digest_data;
-    (void)out{digest_data}(h0, h1, h2, h3, h4, h5, h6, h7);
+    out{digest_data}(h0, h1, h2, h3, h4, h5, h6, h7).or_throw();
 
     Digest digest;
-    (void)in{digest_data}(digest);
+    in{digest_data}(digest).or_throw();
     return digest;
 }
 

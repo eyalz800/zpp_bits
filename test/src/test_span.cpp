@@ -86,11 +86,19 @@ TEST(span, string_input_out_of_range)
               "34");
 
     std::vector<std::string> v;
+#ifdef __cpp_exceptions
     EXPECT_THROW(in(std::span(v)).or_throw(), std::system_error);
+#else
+    EXPECT_EQ(in(std::span(v)), std::errc::value_too_large);
+#endif
 
     v.resize(3);
     in.reset();
+#ifdef __cpp_exceptions
     EXPECT_THROW(in(std::span(v)).or_throw(), std::system_error);
+#else
+    EXPECT_EQ(in(std::span(v)), std::errc::value_too_large);
+#endif
 
     v.resize(4);
     in.reset();
