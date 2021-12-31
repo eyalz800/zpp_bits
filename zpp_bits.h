@@ -15,7 +15,7 @@
 #endif
 #elif defined _MSC_VER
 #define ZPP_BITS_INLINE __forceinline
-#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr [msvc:forceinline]
+#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
 #endif
 #endif
 
