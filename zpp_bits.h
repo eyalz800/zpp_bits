@@ -355,6 +355,26 @@ struct variant_checker<Variant<Types...>>
 template <typename Variant>
 using variant = typename variant_checker<Variant>::type;
 
+template <typename Tuple>
+struct tuple;
+
+template <typename... Types, template <typename...> typename Tuple>
+struct tuple<Tuple<Types...>>
+{
+    template <std::size_t Index = 0>
+    constexpr static auto ZPP_BITS_INLINE visit(auto && tuple, auto && index, auto && visitor)
+    {
+        if constexpr (Index + 1 == sizeof...(Types)) {
+            return visitor(std::get<Index>(tuple));
+        } else {
+            if (Index == index) {
+                return visitor(std::get<Index>(tuple));
+            }
+            return visit<Index + 1>(tuple, index, visitor);
+        }
+    }
+};
+
 template <typename Type, typename Visitor = std::monostate>
 struct visitor
 {
@@ -1778,34 +1798,38 @@ private:
             return std::errc::bad_message;
         }
 
-        using loader_type =
-            errc (*)(decltype(*this), decltype(variant) &);
+        constexpr std::tuple loaders{
+            [](auto & self,
+               auto & variant) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                if constexpr (std::is_default_constructible_v<Types>) {
+                    if (variant.index() !=
+                        traits::variant<type>::template index_by_type<
+                            Types>()) {
+                        variant = Types{};
+                    }
+                    return self.serialize_one(
+                        *std::get_if<Types>(&variant));
+                } else {
+                    std::aligned_storage_t<sizeof(Types), alignof(Types)>
+                        storage;
 
-        constexpr loader_type loaders[] = {static_cast<loader_type>([](
-            auto & self, auto & variant) constexpr {
-            if constexpr (std::is_default_constructible_v<Types>) {
-                if (variant.index() !=
-                    traits::variant<type>::template index_by_type<
-                        Types>()) {
-                    variant = Types{};
+                    std::unique_ptr<Types, void (*)(Types *)> object(
+                        access::placement_new<Types>(
+                            std::addressof(storage)),
+                        [](auto pointer) { access::destruct(*pointer); });
+
+                    if (auto result = self.serialize_one(*object);
+                        failure(result)) [[unlikely]] {
+                        return result;
+                    }
+                    variant = std::move(*object);
                 }
-                return self.serialize_one(*std::get_if<Types>(&variant));
-            } else {
-                std::aligned_storage_t<sizeof(Types), alignof(Types)> storage;
+            }...};
 
-                std::unique_ptr<Types, void (*)(Types *)> object(
-                    access::placement_new<Types>(std::addressof(storage)),
-                    [](auto pointer) { access::destruct(*pointer); });
-
-                if (auto result = self.serialize_one(*object);
-                    failure(result)) [[unlikely]] {
-                    return result;
-                }
-                variant = std::move(*object);
-            }
-        })...};
-
-        return loaders[index](*this, variant);
+        return traits::tuple<std::remove_cvref_t<decltype(loaders)>>::
+            visit(loaders, index, [&](auto && loader) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                return loader(*this, variant);
+            });
     }
 
     constexpr errc ZPP_BITS_INLINE
