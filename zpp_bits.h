@@ -27,6 +27,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <iterator>
 #include <limits>
@@ -775,14 +776,16 @@ struct [[nodiscard]] errc
         return code;
     }
 
-#ifdef __cpp_exceptions
     constexpr void or_throw() const
     {
         if (failure(code)) [[unlikely]] {
+#ifdef __cpp_exceptions
             throw std::system_error(std::make_error_code(code));
+#else
+            std::abort();
+#endif
         }
     }
-#endif
 
     std::errc code;
 };
@@ -2302,11 +2305,14 @@ struct [[nodiscard]] value_or_errc
     }
 #endif
 
-#ifdef __cpp_exceptions
     constexpr decltype(auto) or_throw() &
     {
         if (failure()) [[unlikely]] {
+#ifdef __cpp_exceptions
             throw std::system_error(std::make_error_code(error().code));
+#else
+            std::abort();
+#endif
         }
         return value();
     }
@@ -2314,7 +2320,11 @@ struct [[nodiscard]] value_or_errc
     constexpr decltype(auto) or_throw() &&
     {
         if (failure()) [[unlikely]] {
+#ifdef __cpp_exceptions
             throw std::system_error(std::make_error_code(error().code));
+#else
+            std::abort();
+#endif
         }
         return std::move(*this).value();
     }
@@ -2322,11 +2332,14 @@ struct [[nodiscard]] value_or_errc
     constexpr decltype(auto) or_throw() const &
     {
         if (failure()) [[unlikely]] {
+#ifdef __cpp_exceptions
             throw std::system_error(std::make_error_code(error().code));
+#else
+            std::abort();
+#endif
         }
         return value();
     }
-#endif
 
     union
     {
