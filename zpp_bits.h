@@ -248,7 +248,7 @@ struct variant_impl<Variant<Types...>>
     }
 
     template <std::size_t CurrentIndex = 0>
-    constexpr static auto id(auto index)
+    constexpr static auto ZPP_BITS_INLINE id(auto index)
     {
         if constexpr (CurrentIndex == (sizeof...(Types) - 1)) {
             return id<CurrentIndex>();
@@ -274,7 +274,7 @@ struct variant_impl<Variant<Types...>>
     }
 
     template <std::size_t CurrentIndex = 0>
-    constexpr static std::size_t index(auto && id)
+    constexpr static std::size_t ZPP_BITS_INLINE index(auto && id)
     {
         if constexpr (CurrentIndex == sizeof...(Types)) {
             return std::numeric_limits<std::size_t>::max();
@@ -1781,7 +1781,8 @@ private:
         using loader_type =
             errc (*)(decltype(*this), decltype(variant) &);
 
-        constexpr loader_type loaders[] = {[](auto & self, auto & variant) {
+        constexpr loader_type loaders[] = {static_cast<loader_type>([](
+            auto & self, auto & variant) constexpr {
             if constexpr (std::is_default_constructible_v<Types>) {
                 if (variant.index() !=
                     traits::variant<type>::template index_by_type<
@@ -1802,7 +1803,7 @@ private:
                 }
                 variant = std::move(*object);
             }
-        }...};
+        })...};
 
         return loaders[index](*this, variant);
     }
@@ -2311,7 +2312,8 @@ struct [[nodiscard]] value_or_errc
     bool m_failure{};
 };
 
-constexpr auto apply(auto && function, auto && archive) requires(
+constexpr auto ZPP_BITS_INLINE
+apply(auto && function, auto && archive) requires(
     std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
 {
     using function_type = std::decay_t<decltype(function)>;
@@ -2371,7 +2373,7 @@ constexpr auto apply(auto && function, auto && archive) requires(
     }
 }
 
-constexpr auto
+constexpr auto ZPP_BITS_INLINE
 apply(auto && self, auto && function, auto && archive) requires(
     std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
 {
@@ -2440,7 +2442,8 @@ struct bind
         typename function_traits<function_type>::return_type;
     static constexpr auto opaque = false;
 
-    constexpr static decltype(auto) call(auto && archive, auto && context)
+    constexpr static decltype(auto) ZPP_BITS_INLINE call(auto && archive,
+                                                         auto && context)
     {
         if constexpr (std::is_member_function_pointer_v<
                           std::remove_cvref_t<decltype(Function)>>) {
@@ -2462,7 +2465,9 @@ struct bind_opaque
         typename function_traits<function_type>::return_type;
     static constexpr auto opaque = true;
 
-    constexpr static decltype(auto) call(auto && in, auto && out, auto && context)
+    constexpr static decltype(auto) ZPP_BITS_INLINE call(auto && in,
+                                                         auto && out,
+                                                         auto && context)
     {
         if constexpr (std::is_member_function_pointer_v<
                           std::remove_cvref_t<decltype(Function)>>) {
@@ -2742,7 +2747,8 @@ struct rpc_impl
         }
 
         template <typename FirstBinding, typename... OtherBindings>
-        constexpr auto call_binding(auto & id) requires (!FirstBinding::opaque)
+        constexpr auto ZPP_BITS_INLINE
+        call_binding(auto & id) requires(!FirstBinding::opaque)
         {
             if (FirstBinding::id::value == id) {
                 if constexpr (std::is_void_v<decltype(FirstBinding::call(
@@ -2779,7 +2785,8 @@ struct rpc_impl
         }
 
         template <typename FirstBinding, typename... OtherBindings>
-        constexpr auto call_binding(auto & id) requires FirstBinding::opaque
+        constexpr auto ZPP_BITS_INLINE
+        call_binding(auto & id) requires FirstBinding::opaque
         {
             if (FirstBinding::id::value == id) {
                 if constexpr (std::is_void_v<decltype(FirstBinding::call(
