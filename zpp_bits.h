@@ -959,6 +959,17 @@ public:
 
     using byte_type = typename ByteView::value_type;
 
+    constexpr static bool is_resizable = requires(ByteView view)
+    {
+        view.resize(1);
+    };
+
+    using view_type =
+        std::conditional_t<is_resizable,
+                           ByteView &,
+                           std::remove_cvref_t<decltype(
+                               std::span{std::declval<ByteView &>()})>>;
+
     constexpr explicit basic_out(ByteView && view) : m_data(view)
     {
         static_assert(!is_resizable);
@@ -1267,14 +1278,6 @@ protected:
 
     constexpr ~basic_out() = default;
 
-    constexpr static bool is_resizable = requires(ByteView view)
-    {
-        view.resize(1);
-    };
-
-    using view_type =
-        std::conditional_t<is_resizable, ByteView &, std::span<byte_type>>;
-
     view_type m_data{};
     std::size_t m_position{};
 };
@@ -1318,7 +1321,7 @@ template <typename Type>
 out(Type &&) -> out<Type>;
 
 template <typename Type, std::size_t Size>
-out(Type (&)[Size]) -> out<std::span<Type>>;
+out(Type (&)[Size]) -> out<std::span<Type, Size>>;
 
 template <concepts::byte_view ByteView = std::vector<std::byte>>
 class in
@@ -1406,6 +1409,17 @@ public:
     {
         return kind::in;
     }
+
+    constexpr static bool is_resizable = requires(ByteView view)
+    {
+        view.resize(1);
+    };
+
+    using view_type =
+        std::conditional_t<is_resizable,
+                           ByteView &,
+                           std::remove_cvref_t<decltype(
+                               std::span{std::declval<ByteView &>()})>>;
 
 private:
     constexpr auto ZPP_BITS_INLINE serialize_many(auto && first_item,
@@ -1850,20 +1864,12 @@ private:
         return {};
     }
 
-    constexpr static bool is_resizable = requires(ByteView view)
-    {
-        view.resize(1);
-    };
-
-    using view_type =
-        std::conditional_t<is_resizable, ByteView &, std::span<byte_type>>;
-
     view_type m_data{};
     std::size_t m_position{};
 };
 
 template <typename Type, std::size_t Size>
-in(Type (&)[Size]) -> in<std::span<Type>>;
+in(Type (&)[Size]) -> in<std::span<Type, Size>>;
 
 constexpr auto input(auto && view, auto &&... option)
 {
