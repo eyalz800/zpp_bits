@@ -685,18 +685,19 @@ struct sized_container : public Container
 {
     static_assert(std::is_unsigned_v<SizeType> || std::is_void_v<SizeType>);
 
-    using Container::Container;
+    using base = Container;
+    using base::base;
 
-    constexpr sized_container(Container && other) noexcept(
-        std::is_nothrow_move_constructible_v<Container>) :
-        Container(std::move(other))
+    constexpr sized_container(base && other) noexcept(
+        std::is_nothrow_move_constructible_v<base>) :
+        base(std::move(other))
     {
     }
 
-    constexpr sized_container & operator=(Container && other) noexcept(
-        std::is_nothrow_move_assignable_v<Container>)
+    constexpr sized_container & operator=(base && other) noexcept(
+        std::is_nothrow_move_assignable_v<base>)
     {
-        Container::operator=(std::move(other));
+        base::operator=(std::move(other));
         return *this;
     }
 
@@ -704,7 +705,7 @@ struct sized_container : public Container
                                                     auto & self)
     {
         return serializer.template serialize_one<SizeType>(
-            static_cast<Container &>(self));
+            static_cast<base &>(self));
     }
 };
 
@@ -1323,6 +1324,18 @@ out(Type &&) -> out<Type>;
 template <typename Type, std::size_t Size>
 out(Type (&)[Size]) -> out<std::span<Type, Size>>;
 
+template <typename Type, typename SizeType>
+out(sized_container<Type, SizeType> &)
+    -> out<typename sized_container<Type, SizeType>::base>;
+
+template <typename Type, typename SizeType>
+out(const sized_container<Type, SizeType> &)
+    -> out<const typename sized_container<Type, SizeType>::base>;
+
+template <typename Type, typename SizeType>
+out(sized_container<Type, SizeType> &&)
+    -> out<typename sized_container<Type, SizeType>::base>;
+
 template <concepts::byte_view ByteView = std::vector<std::byte>>
 class in
 {
@@ -1870,6 +1883,18 @@ private:
 
 template <typename Type, std::size_t Size>
 in(Type (&)[Size]) -> in<std::span<Type, Size>>;
+
+template <typename Type, typename SizeType>
+in(sized_container<Type, SizeType> &)
+    -> in<typename sized_container<Type, SizeType>::base>;
+
+template <typename Type, typename SizeType>
+in(const sized_container<Type, SizeType> &)
+    -> in<const typename sized_container<Type, SizeType>::base>;
+
+template <typename Type, typename SizeType>
+in(sized_container<Type, SizeType> &&)
+    -> in<typename sized_container<Type, SizeType>::base>;
 
 constexpr auto input(auto && view, auto &&... option)
 {
