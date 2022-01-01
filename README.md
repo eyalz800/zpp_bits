@@ -8,6 +8,12 @@ A modern C++20 binary serialization library, with just one header file.
 This library is a successor to [zpp::serializer](https://github.com/eyalz800/serializer).
 The library tries to be simpler for use, but has more or less similar API to its predecessor.
 
+Contents
+--------
+* [Motivation](#motivation)
+* [Features](#features)
+* [Benchmark](#benchmark)
+
 Motivation
 ----------
 * Serialize any object from and to binary form as seamless as possible.
@@ -26,7 +32,7 @@ Motivation
 polymorphic types with fixed 8 bytes of sha1 serialization id.
 * Lightweight RPC capabilities
 
-Contents
+Features
 --------
 * For many types, enabling serialization is zero lines, these types are required to be of aggregate type.
 Here is an example of a `person` class with name and age:
@@ -796,6 +802,45 @@ static_assert(
 ```
 
 * This should cover most of the basic stuff, more documentation may come in the future.
+
+Benchmark
+---------
+### [fraillt/cpp_serializers_benchmark](https://github.com/fraillt/cpp_serializers_benchmark/tree/a4c0ebfb083c3b07ad16adc4301c9d7a7951f46e)
+#### GCC 11
+| library     | test case                                                  | bin size | data size | ser time | des time |
+| ----------- | ---------------------------------------------------------- | -------- | --------- | -------- | -------- |
+| zpp_bits    | general                                                    | 52192B   | 8413B     | **733ms**| **693ms**|
+| zpp_bits    | fixed buffer                                               | 48000B   | 8413B     | **620ms**| **667ms**|
+| bitsery     | general                                                    | 70904B   | 6913B     | 1470ms   | 1524ms   |
+| bitsery     | fixed buffer                                               | 53648B   | 6913B     | 927ms    | 1466ms   |
+| boost       | general                                                    | 279024B  | 11037B    | 15126ms  | 12724ms  |
+| cereal      | general                                                    | 70560B   | 10413B    | 10777ms  | 9088ms   |
+| flatbuffers | general                                                    | 70640B   | 14924B    | 8757ms   | 3361ms   |
+| handwritten | general                                                    | 47936B   | 10413B    | 1506ms   | 1577ms   |
+| handwritten | unsafe                                                     | 47944B   | 10413B    | 1616ms   | 1392ms   |
+| iostream    | general                                                    | 53872B   | 8413B     | 11956ms  | 12928ms  |
+| msgpack     | general                                                    | 89144B   | 8857B     | 2770ms   | 14033ms  |
+| protobuf    | general                                                    | 2077864B | 10018B    | 19929ms  | 20592ms  |
+| protobuf    | arena                                                      | 2077872B | 10018B    | 10319ms  | 11787ms  |
+| yas         | general                                                    | 61072B   | 10463B    | 2286ms   | 1770ms   |
+
+#### Clang 12.0.1
+| library     | test case                                                  | bin size | data size | ser time | des time |
+| ----------- | ---------------------------------------------------------- | -------- | --------- | -------- | -------- |
+| zpp_bits    | general                                                    | 47128B   | 8413B     | **790ms**| **715ms**|
+| zpp_bits    | fixed buffer                                               | 43056B   | 8413B     | **605ms**| **694ms**|
+| bitsery     | general                                                    | 53728B   | 6913B     | 2128ms   | 1832ms   |
+| bitsery     | fixed buffer                                               | 49248B   | 6913B     | 946ms    | 1941ms   |
+| boost       | general                                                    | 237008B  | 11037B    | 16011ms  | 13017ms  |
+| cereal      | general                                                    | 61480B   | 10413B    | 9977ms   | 8565ms   |
+| flatbuffers | general                                                    | 62512B   | 14924B    | 9812ms   | 3472ms   |
+| handwritten | general                                                    | 43112B   | 10413B    | 1391ms   | 1321ms   |
+| handwritten | unsafe                                                     | 43120B   | 10413B    | 1393ms   | 1212ms   |
+| iostream    | general                                                    | 48632B   | 8413B     | 10992ms  | 12771ms  |
+| msgpack     | general                                                    | 77384B   | 8857B     | 3563ms   | 14705ms  |
+| protobuf    | general                                                    | 2032712B | 10018B    | 18125ms  | 20211ms  |
+| protobuf    | arena                                                      | 2032760B | 10018B    | 9166ms   | 11378ms  |
+| yas         | general                                                    | 51000B   | 10463B    | 2114ms   | 1558ms   |
 
 Limitations
 -----------
