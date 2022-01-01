@@ -2072,7 +2072,8 @@ struct known_id_variant
     {
     }
 
-    constexpr static auto serialize(auto & serializer, auto & self)
+    constexpr static auto ZPP_BITS_INLINE serialize(auto & serializer,
+                                                    auto & self)
     {
         return serializer.template serialize_one<Id>(self.variant);
     }
@@ -2102,7 +2103,8 @@ struct known_dynamic_id_variant
     {
     }
 
-    constexpr static auto serialize(auto & serializer, auto & self)
+    constexpr static auto ZPP_BITS_INLINE serialize(auto & serializer,
+                                                    auto & self)
     {
         return serializer.template serialize_one(self.variant, self.id);
     }
