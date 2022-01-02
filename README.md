@@ -1,6 +1,7 @@
 zpp::bits
 =========
 
+[![.github/workflows/actions.yml](https://github.com/eyalz800/zpp_bits/actions/workflows/actions.yml/badge.svg)](https://github.com/eyalz800/zpp_bits/actions/workflows/actions.yml)
 [![Build Status](https://dev.azure.com/eyalz800/zpp_bits/_apis/build/status/eyalz800.zpp_bits?branchName=main)](https://dev.azure.com/eyalz800/zpp_bits/_build/latest?definitionId=9&branchName=main)
 
 A modern C++20 binary serialization library, with just one header file.

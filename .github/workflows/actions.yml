@@ -1,0 +1,105 @@
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 8 * * *'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.config.vm_image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: GCC 11 Ubuntu
+            compiler: gcc
+            compiler_version: 11
+            make: make
+            mode: release
+            os: ubuntu
+            vm_image: ubuntu-20.04
+            test_autodetect_members: 0
+            with_zpp_throwing: 0
+          - name: Clang 12 Ubuntu
+            compiler: clang
+            compiler_version: 12
+            make: make
+            mode: release
+            os: ubuntu
+            vm_image: ubuntu-20.04
+            test_autodetect_members: 0
+            with_zpp_throwing: 1
+          - name: Clang 13 Ubuntu
+            compiler: clang
+            compiler_version: 13
+            make: make
+            mode: release
+            os: ubuntu
+            vm_image: ubuntu-20.04
+            test_autodetect_members: 1
+            with_zpp_throwing: 1
+          - name: Clang 12 MacOS
+            compiler: clang
+            compiler_version: 12
+            make: gmake
+            mode: release
+            os: macos
+            vm_image: macos-11
+            test_autodetect_members: 0
+            with_zpp_throwing: 1
+          - name: Clang 13 MacOS
+            compiler: clang
+            compiler_version: 13
+            make: gmake
+            mode: release
+            os: macos
+            vm_image: macos-11
+            test_autodetect_members: 1
+            with_zpp_throwing: 1
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: 'install (ubuntu, clang)'
+        if: matrix.config.os == 'ubuntu' && matrix.config.compiler == 'clang'
+        run: |
+          curl -fLo llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          sudo ./llvm.sh ${{ matrix.config.compiler_version }}
+          sudo apt install -y libc++-${{ matrix.config.compiler_version }}-dev libc++abi-${{ matrix.config.compiler_version }}-dev libunwind-${{ matrix.config.compiler_version }}-dev
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${{ matrix.config.compiler_version }} ${{ matrix.config.compiler_version }}00
+      - name: 'install (ubuntu, gcc)'
+        if: matrix.config.os == 'ubuntu' && matrix.config.compiler == 'gcc'
+        run: |
+          curl -fLo llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt install gcc-${{ matrix.config.compiler_version }} g++-${{ matrix.config.compiler_version }}
+      - name: 'install (macos)'
+        if: matrix.config.os == 'macos'
+        run: |
+          brew install llvm@${{ matrix.config.compiler_version }} make
+          echo "PATH=/usr/local/opt/llvm/bin:$PATH" >> $GITHUB_ENV
+      - name: 'install (zpp_throwing)'
+        if: matrix.config.with_zpp_throwing == '1'
+        run: |
+          git clone https://github.com/eyalz800/zpp_throwing ../zpp_throwing
+      - name: 'configure (gcc, libstdc++)'
+        if: matrix.config.compiler == 'gcc'
+        run: |
+          sed -i 's/-stdlib=libc++//g' ./test/zpp_project.mk
+          sed -i 's/ZPP_CC .*/ZPP_CC := g++-${{ matrix.config.compiler_version }}/g' ./test/zpp_project.mk
+          sed -i 's/ZPP_CXX .*/ZPP_CXX := g++-${{ matrix.config.compiler_version }}/g' ./test/zpp_project.mk
+      - name: 'compile'
+        run: |
+          ${{ matrix.config.make }} -C test -f zpp.mk -j mode=${{ matrix.config.mode }} ZPP_BITS_AUTODETECT_MEMBERS_MODE=${{ matrix.config.test_autodetect_members }}
+      - name: 'test'
+        run: |
+          ./test/out/${{ matrix.config.mode }}/default/output
+
