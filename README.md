@@ -744,6 +744,14 @@ in(zpp::bits::unsized(s)).or_throw();
 // std::memcmp("hello"sv.data(), s.data(), "hello"sv.size()) == 0
 ```
 
+* The library does not support serializing null pointer values, however to explicitly support
+optional owning pointers, to be able to create graphs and complex structures, you can use
+either `std::optional<std::unique_ptr<T>>` or the more optimized `zpp::bits::optional_ptr<T>` which
+optimizes out the boolean that the optional object usually keeps, and uses null pointer
+as an invalid state. Serializing a null pointer value will serialize a zero byte, while
+non-null values serialize as a single one byte followed by the bytes of the object.
+(i.e, serialization is identical to `std::optional<T>`).
+
 * As part of the library implementation it was required to implement some reflection types, for
 counting members and visiting members, and the library exposes these to the user:
 ```cpp

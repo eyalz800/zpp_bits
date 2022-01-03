@@ -832,6 +832,60 @@ constexpr auto implicit_optional_ref(auto && value)
     return implicit_optional<decltype(value) &>(value);
 }
 
+template <typename Type>
+struct optional_ptr : std::unique_ptr<Type>
+{
+public:
+    using base = std::unique_ptr<Type>;
+    using base::base;
+    using base::operator=;
+
+    constexpr optional_ptr(base && other) noexcept :
+        base(std::move(other))
+    {
+    }
+};
+
+template <typename Type, typename...>
+optional_ptr(Type *) -> optional_ptr<Type>;
+
+template <typename Archive, typename Type>
+constexpr static auto ZPP_BITS_INLINE serialize(
+    Archive & archive,
+    const optional_ptr<Type> & self) requires(Archive::kind() == kind::out)
+{
+    if (!self) [[unlikely]] {
+        return archive(std::byte(false));
+    } else {
+        return archive(std::byte(true), *self);
+    }
+}
+
+template <typename Archive, typename Type>
+constexpr static auto ZPP_BITS_INLINE
+serialize(Archive & archive,
+          optional_ptr<Type> & self) requires(Archive::kind() == kind::in)
+{
+    std::byte has_value{};
+    if (auto result = archive(has_value); failure(result))
+        [[unlikely]] {
+        return result;
+    }
+
+    if (!bool(has_value)) [[unlikely]] {
+        self = {};
+        return errc{};
+    }
+
+    if (auto result =
+            archive(static_cast<std::unique_ptr<Type> &>(self));
+        failure(result)) [[unlikely]] {
+        return result;
+    }
+
+    return errc{};
+}
+
 template <concepts::container Container, typename SizeType>
 struct sized_container : public Container
 {
@@ -1328,10 +1382,10 @@ protected:
     constexpr errc ZPP_BITS_INLINE
     serialize_one(concepts::optional auto && optional)
     {
-        if (optional.has_value()) {
-            return serialize_many(std::byte(true), *optional);
-        } else {
+        if (!optional) [[unlikely]] {
             return serialize_one(std::byte(false));
+        } else {
+            return serialize_many(std::byte(true), *optional);
         }
     }
 
@@ -1827,7 +1881,7 @@ private:
             return result;
         }
 
-        if (!bool(has_value)) {
+        if (!bool(has_value)) [[unlikely]] {
             optional = std::nullopt;
             return {};
         }
@@ -3742,9 +3796,6 @@ using u32string_view4b = sized_t<std::u32string_view, std::uint32_t>;
 using u32string_view8b = sized_t<std::u32string_view, std::uint64_t>;
 using static_u32string_view = unsized_t<std::u32string_view>;
 using native_u32string_view = sized_t<std::u32string_view, std::u32string_view::size_type>;
-
-template <typename Type>
-using optional_ptr = implicit_optional<std::unique_ptr<Type>>;
 
 } // namespace zpp::bits
 
