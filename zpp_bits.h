@@ -182,6 +182,10 @@ struct access
         || requires(Type && item, Archive && archive)
         {
             std::remove_cvref_t<Type>::serialize(archive, item);
+        }
+        || requires(Type && item, Archive && archive)
+        {
+            serialize(archive, item);
         };
     }
 };
@@ -445,8 +449,9 @@ concept byte_view = byte_type<typename std::remove_cvref_t<Type>::value_type> &&
 };
 
 template <typename Type>
-concept has_serialize = access::has_serialize< Type,
-        traits::visitor<std::remove_cvref_t<Type>>>();
+concept has_serialize =
+    access::has_serialize<Type,
+                          traits::visitor<std::remove_cvref_t<Type>>>();
 
 template <typename Type>
 concept variant = !has_serialize<Type> && requires (Type variant) {
