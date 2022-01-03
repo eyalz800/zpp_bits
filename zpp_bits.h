@@ -750,7 +750,6 @@ constexpr auto failure(errc code)
 template <typename Type>
 struct optional_ptr : std::unique_ptr<Type>
 {
-public:
     using base = std::unique_ptr<Type>;
     using base::base;
     using base::operator=;
