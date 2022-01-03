@@ -95,6 +95,12 @@ struct access
     };
 
     template <typename Item>
+    constexpr static auto make(auto &&... arguments)
+    {
+        return Item{std::forward<decltype(arguments)>(arguments)...};
+    }
+
+    template <typename Item>
     constexpr static auto placement_new(void * address,
                                         auto &&... arguments)
     {
