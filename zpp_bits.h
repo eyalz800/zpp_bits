@@ -1663,7 +1663,13 @@ private:
 
         container.clear();
 
-        for (SizeType index{}; index < size; ++index) {
+        constexpr auto destructor = [](auto pointer) constexpr
+        {
+            access::destruct(*pointer);
+        };
+
+        for (SizeType index{}; index < size; ++index)
+        {
             if constexpr (requires { typename type::mapped_type; }) {
                 using value_type = std::pair<typename type::key_type,
                                              typename type::mapped_type>;
@@ -1671,10 +1677,8 @@ private:
                                        alignof(value_type)>
                     storage;
 
-                std::unique_ptr<value_type, void (*)(value_type *)> object(
-                    access::placement_new<value_type>(
-                        std::addressof(storage)),
-                    [](auto pointer) { access::destruct(*pointer); });
+                std::unique_ptr<value_type, decltype(destructor)> object(
+                    access::placement_new<value_type>(std::addressof(storage)));
                 if (auto result = serialize_one(*object);
                     failure(result)) [[unlikely]] {
                     return result;
@@ -1688,10 +1692,8 @@ private:
                                        alignof(value_type)>
                     storage;
 
-                std::unique_ptr<value_type, void (*)(value_type *)> object(
-                    access::placement_new<value_type>(
-                        std::addressof(storage)),
-                    [](auto pointer) { access::destruct(*pointer); });
+                std::unique_ptr<value_type, decltype(destructor)> object(
+                    access::placement_new<value_type>(std::addressof(storage)));
                 if (auto result = serialize_one(*object);
                     failure(result)) [[unlikely]] {
                     return result;
@@ -1748,11 +1750,16 @@ private:
             std::aligned_storage_t<sizeof(value_type), alignof(value_type)>
                 storage;
 
-            std::unique_ptr<value_type, void (*)(value_type *)> object(
-                access::placement_new<value_type>(std::addressof(storage)),
-                [](auto pointer) { access::destruct(*pointer); });
+            constexpr auto destructor = [](auto pointer) constexpr
+            {
+                access::destruct(*pointer);
+            };
 
-            if (auto result = serialize_one(*optional); failure(result))
+            std::unique_ptr<value_type, decltype(destructor)> object(
+                access::placement_new<value_type>(
+                    std::addressof(storage)));
+
+            if (auto result = serialize_one(*object); failure(result))
                 [[unlikely]] {
                 return result;
             }
@@ -1793,11 +1800,14 @@ private:
                                        alignof(element_type)>
                     storage;
 
-                std::unique_ptr<element_type, void (*)(element_type *)>
-                    object(
-                        access::placement_new<element_type>(
-                            std::addressof(storage)),
-                        [](auto pointer) { access::destruct(*pointer); });
+                constexpr auto destructor = [](auto pointer) constexpr
+                {
+                    access::destruct(*pointer);
+                };
+
+                std::unique_ptr<element_type, decltype(destructor)> object(
+                    access::placement_new<element_type>(
+                        std::addressof(storage)));
 
                 if (auto result = serialize_one(*object); failure(result))
                     [[unlikely]] {
@@ -1843,10 +1853,14 @@ private:
                     std::aligned_storage_t<sizeof(Types), alignof(Types)>
                         storage;
 
-                    std::unique_ptr<Types, void (*)(Types *)> object(
+                    constexpr auto destructor = [](auto pointer) constexpr
+                    {
+                        access::destruct(*pointer);
+                    };
+
+                    std::unique_ptr<Types, decltype(destructor)> object(
                         access::placement_new<Types>(
-                            std::addressof(storage)),
-                        [](auto pointer) { access::destruct(*pointer); });
+                            std::addressof(storage)));
 
                     if (auto result = self.serialize_one(*object);
                         failure(result)) [[unlikely]] {
