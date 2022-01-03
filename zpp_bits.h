@@ -687,6 +687,146 @@ constexpr auto operator|(auto left, auto right) requires requires
     return aggregated_options{std::move(left), std::move(right)};
 }
 
+constexpr auto success(std::errc code)
+{
+    return std::errc{} == code;
+}
+
+constexpr auto failure(std::errc code)
+{
+    return std::errc{} != code;
+}
+
+struct [[nodiscard]] errc
+{
+    constexpr errc(std::errc code = {}) : code(code)
+    {
+    }
+
+#if __has_include("zpp_throwing.h")
+    constexpr zpp::throwing<void> operator co_await() const
+    {
+        if (failure(code)) [[unlikely]] {
+            return code;
+        }
+        return zpp::void_v;
+    }
+#endif
+
+    constexpr operator std::errc() const
+    {
+        return code;
+    }
+
+    constexpr void or_throw() const
+    {
+        if (failure(code)) [[unlikely]] {
+#ifdef __cpp_exceptions
+            throw std::system_error(std::make_error_code(code));
+#else
+            std::abort();
+#endif
+        }
+    }
+
+    std::errc code;
+};
+
+constexpr auto success(errc code)
+{
+    return std::errc{} == code;
+}
+
+constexpr auto failure(errc code)
+{
+    return std::errc{} != code;
+}
+
+template <typename Type>
+class implicit_optional
+{
+public:
+    constexpr implicit_optional() = default;
+
+    constexpr implicit_optional(Type & value) :
+        m_value(value)
+    {
+    }
+
+    constexpr implicit_optional(const Type & value) requires (!std::is_const_v<Type>) :
+        m_value(value)
+    {
+    }
+
+    constexpr implicit_optional(Type && value) requires (!std::is_reference_v<Type>):
+        m_value(std::move(value))
+    {
+    }
+
+    constexpr auto has_value() const
+    {
+        return m_value != access::make<std::remove_cvref_t<Type>>();
+    }
+
+    constexpr explicit operator bool() const
+    {
+        return m_value != access::make<std::remove_cvref_t<Type>>();
+    }
+
+    constexpr decltype(auto) value()
+    {
+        return (m_value);
+    }
+
+    constexpr decltype(auto) value() const
+    {
+        return (m_value);
+    }
+
+    constexpr decltype(auto) operator*()
+    {
+        return (m_value);
+    }
+
+    constexpr decltype(auto) operator*() const
+    {
+        return (m_value);
+    }
+
+    constexpr decltype(auto) operator=(std::nullopt_t)
+    {
+        m_value = {};
+        return *this;
+    }
+
+    constexpr decltype(auto) operator=(implicit_optional && other) noexcept(
+        std::is_nothrow_move_assignable_v<std::remove_cvref_t<Type>>)
+    {
+        m_value = std::move(other.m_value);
+        return *this;
+    }
+
+    constexpr decltype(auto) operator=(const implicit_optional & other)
+    {
+        m_value = other.m_value;
+        return *this;
+    }
+
+    constexpr decltype(auto) operator=(auto && other)
+    {
+        m_value = std::forward<decltype(other)>(other);
+        return *this;
+    }
+
+private:
+    Type m_value;
+};
+
+constexpr auto implicit_optional_ref(auto && value)
+{
+    return implicit_optional<decltype(value) &>(value);
+}
+
 template <concepts::container Container, typename SizeType>
 struct sized_container : public Container
 {
@@ -749,61 +889,6 @@ template <typename Container>
 constexpr auto unsized(Container && container)
 {
     return sized_container_ref<Container &, void>(container);
-}
-
-constexpr auto success(std::errc code)
-{
-    return std::errc{} == code;
-}
-
-constexpr auto failure(std::errc code)
-{
-    return std::errc{} != code;
-}
-
-struct [[nodiscard]] errc
-{
-    constexpr errc(std::errc code = {}) : code(code)
-    {
-    }
-
-#if __has_include("zpp_throwing.h")
-    constexpr zpp::throwing<void> operator co_await() const
-    {
-        if (failure(code)) [[unlikely]] {
-            return code;
-        }
-        return zpp::void_v;
-    }
-#endif
-
-    constexpr operator std::errc() const
-    {
-        return code;
-    }
-
-    constexpr void or_throw() const
-    {
-        if (failure(code)) [[unlikely]] {
-#ifdef __cpp_exceptions
-            throw std::system_error(std::make_error_code(code));
-#else
-            std::abort();
-#endif
-        }
-    }
-
-    std::errc code;
-};
-
-constexpr auto success(errc code)
-{
-    return std::errc{} == code;
-}
-
-constexpr auto failure(errc code)
-{
-    return std::errc{} != code;
 }
 
 template <typename Type>
@@ -3652,6 +3737,10 @@ using u32string_view4b = sized_t<std::u32string_view, std::uint32_t>;
 using u32string_view8b = sized_t<std::u32string_view, std::uint64_t>;
 using static_u32string_view = unsized_t<std::u32string_view>;
 using native_u32string_view = sized_t<std::u32string_view, std::u32string_view::size_type>;
+
+template <typename Type>
+using optional_ptr = implicit_optional<std::unique_ptr<Type>>;
+
 } // namespace zpp::bits
 
 #endif // ZPP_BITS_H
