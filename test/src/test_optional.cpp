@@ -1,5 +1,8 @@
 #include "test.h"
 
+namespace test_optional
+{
+
 TEST(optional, valid)
 {
     auto [data, in, out] = zpp::bits::data_in_out();
@@ -53,3 +56,4 @@ TEST(optional, nullopt)
     EXPECT_FALSE(o.has_value());
 }
 
+} // namespace test_optional
