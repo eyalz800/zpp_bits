@@ -701,11 +701,9 @@ struct sized_container : public Container
     {
     }
 
-    constexpr sized_container & operator=(base && other) noexcept(
-        std::is_nothrow_move_assignable_v<base>)
+    constexpr sized_container(const base & other) :
+        base(other)
     {
-        base::operator=(std::move(other));
-        return *this;
     }
 
     constexpr static auto ZPP_BITS_INLINE serialize(auto & serializer,
