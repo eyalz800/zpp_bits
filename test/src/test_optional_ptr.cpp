@@ -27,7 +27,7 @@ TEST(optional_ptr, ptr_invalid)
     EXPECT_EQ(encode_hex(data),
               "00");
 
-    zpp::bits::optional_ptr<int> o;
+    zpp::bits::optional_ptr<int> o = std::make_unique<int>(1337);
     in(o).or_throw();
 
     EXPECT_TRUE(o == nullptr);
