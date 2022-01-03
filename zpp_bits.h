@@ -449,7 +449,23 @@ concept has_serialize = access::has_serialize< Type,
         traits::visitor<std::remove_cvref_t<Type>>>();
 
 template <typename Type>
-concept container = !has_serialize<Type> && requires(Type container)
+concept variant = !has_serialize<Type> && requires (Type variant) {
+    variant.index();
+    std::get_if<0>(&variant);
+    std::variant_size_v<std::remove_cvref_t<Type>>;
+};
+
+template <typename Type>
+concept optional = !has_serialize<Type> && requires (Type optional) {
+    optional.value();
+    optional.has_value();
+    optional.operator bool();
+    optional.operator*();
+};
+
+template <typename Type>
+concept container =
+    !has_serialize<Type> && !optional<Type> && requires(Type container)
 {
     typename std::remove_cvref_t<Type>::value_type;
     container.size();
@@ -475,24 +491,9 @@ concept tuple = !has_serialize<Type> && !container<Type> && requires(Type tuple)
 };
 
 template <typename Type>
-concept variant = !has_serialize<Type> && requires (Type variant) {
-    variant.index();
-    std::get_if<0>(&variant);
-    std::variant_size_v<std::remove_cvref_t<Type>>;
-};
-
-template <typename Type>
-concept optional = !has_serialize<Type> && requires (Type optional) {
-    optional.value();
-    optional.has_value();
-    optional.operator bool();
-    optional.operator*();
-};
-
-template <typename Type>
-concept owning_pointer =
-    traits::is_unique_ptr<std::remove_cvref_t<Type>>::value ||
-    traits::is_shared_ptr<std::remove_cvref_t<Type>>::value;
+concept owning_pointer = !optional<Type> &&
+    (traits::is_unique_ptr<std::remove_cvref_t<Type>>::value ||
+    traits::is_shared_ptr<std::remove_cvref_t<Type>>::value);
 
 template <typename Type>
 concept unspecialized =
