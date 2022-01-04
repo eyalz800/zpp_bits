@@ -638,12 +638,12 @@ template <typename Option>
 struct option
 {
     using zpp_bits_option = void;
-    constexpr auto operator()(auto && bits)
+    constexpr auto operator()(auto && archive)
     {
         if constexpr (requires {
-                          bits.option(static_cast<Option &>(*this));
+                          archive.option(static_cast<Option &>(*this));
                       }) {
-            bits.option(static_cast<Option &>(*this));
+            archive.option(static_cast<Option &>(*this));
         }
     }
 };
@@ -652,10 +652,10 @@ template <typename Left, typename Right>
 struct aggregated_options
 {
     using zpp_bits_option = void;
-    constexpr auto operator()(auto && bits)
+    constexpr auto operator()(auto && archive)
     {
-        left(bits);
-        right(bits);
+        left(archive);
+        right(archive);
     }
 
     [[no_unique_address]] Left left;
