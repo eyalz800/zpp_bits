@@ -106,6 +106,11 @@ static_assert(!zpp::bits::concepts::byte_serializable<std::string_view>);
 static_assert(!zpp::bits::concepts::byte_serializable<std::span<char>>);
 static_assert(zpp::bits::concepts::byte_serializable<std::array<char, 2>>);
 
+static_assert(!zpp::bits::concepts::byte_serializable<stdarray_custom>);
+static_assert(!zpp::bits::concepts::byte_serializable<stdarray_custom_outside>);
+static_assert(!zpp::bits::concepts::byte_serializable<std::array<stdarray_custom_outside, 1>>);
+static_assert(!zpp::bits::concepts::byte_serializable<std::array<stdarray_custom, 1>>);
+
 #if !ZPP_BITS_AUTODETECT_MEMBERS_MODE
 auto serialize(const array &) -> zpp::bits::members<2>;
 auto serialize(const stdarray &) -> zpp::bits::members<2>;
@@ -113,6 +118,9 @@ auto serialize(const stdarray_array &) -> zpp::bits::members<2>;
 auto serialize(const integers &) -> zpp::bits::members<2>;
 auto serialize(const integers &) -> zpp::bits::members<2>;
 #endif
+
+static_assert(zpp::bits::concepts::byte_serializable<stdarray>);
+static_assert(zpp::bits::concepts::byte_serializable<std::array<stdarray, 1>>);
 
 static_assert(zpp::bits::concepts::byte_serializable<array>);
 static_assert(zpp::bits::concepts::byte_serializable<stdarray>);
