@@ -744,6 +744,21 @@ in(zpp::bits::unsized(s)).or_throw();
 // std::memcmp("hello"sv.data(), s.data(), "hello"sv.size()) == 0
 ```
 
+* The default byte order used is the native processor/OS selected one.
+You may choose another byte order using `zpp::bits::endian` during construction like so:
+```cpp
+zpp::bits::in in(data, zpp::bits::endian::big{}); // Use big endian
+zpp::bits::in in(data, zpp::bits::endian::network{}); // Use big endian (provided for convenience)
+zpp::bits::in in(data, zpp::bits::endian::little{}); // Use little endian
+zpp::bits::in in(data, zpp::bits::endian::swapped{}); // If little use big otherwise little.
+zpp::bits::in in(data, zpp::bits::endian::native{}); // Use the native one (default).
+
+// Can also do it together, for example big endian:
+auto [data, in, out] = zpp::bits::data_in_out(zpp::bits::endian::big{});
+auto [data, out] = zpp::bits::data_out(zpp::bits::endian::big{});
+auto [data, in] = zpp::bits::data_in(zpp::bits::endian::big{});
+```
+
 * The library does not support serializing null pointer values, however to explicitly support
 optional owning pointers, to be able to create graphs and complex structures, you can use
 either `std::optional<std::unique_ptr<T>>` or the more optimized `zpp::bits::optional_ptr<T>` which
