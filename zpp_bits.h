@@ -157,12 +157,6 @@ struct access
         // clang-format on
     }
 
-    template <typename Type>
-    struct byte_serializable_visitor;
-
-    template <typename Type>
-    constexpr static auto byte_serializable();
-
     template <typename Type, typename Archive>
     constexpr static auto has_serialize()
     {
@@ -188,6 +182,25 @@ struct access
             serialize(archive, item);
         };
     }
+
+    template <typename Type, typename Archive>
+    constexpr static auto has_explicit_serialize()
+    {
+        return requires(Type && item, Archive && archive)
+        {
+            std::remove_cvref_t<Type>::serialize(archive, item);
+        }
+        || requires(Type && item, Archive && archive)
+        {
+            serialize(archive, item);
+        };
+    }
+
+    template <typename Type>
+    struct byte_serializable_visitor;
+
+    template <typename Type>
+    constexpr static auto byte_serializable();
 };
 
 namespace traits
@@ -454,6 +467,11 @@ concept has_serialize =
                           traits::visitor<std::remove_cvref_t<Type>>>();
 
 template <typename Type>
+concept has_explicit_serialize = access::has_explicit_serialize<
+    Type,
+    traits::visitor<std::remove_cvref_t<Type>>>();
+
+template <typename Type>
 concept variant = !has_serialize<Type> && requires (Type variant) {
     variant.index();
     std::get_if<0>(&variant);
@@ -517,15 +535,7 @@ template <typename Type>
 concept byte_serializable = access::byte_serializable<Type>();
 
 template <typename Archive, typename Type>
-concept custom_serializable = requires (Archive && archive, Type && type) {
-    std::remove_cv_t<Type>::serialize(archive, type);
-} || requires (Archive && archive, Type && type) {
-    serialize(archive, type);
-};
-
-template <typename Archive, typename Type>
-concept serialize_as_bytes =
-    byte_serializable<Type> && !custom_serializable<Archive, Type>;
+concept serialize_as_bytes = byte_serializable<Type>;
 
 } // namespace concepts
 
@@ -937,10 +947,13 @@ struct access::byte_serializable_visitor
 
         if constexpr (concepts::empty<type>) {
             return std::false_type{};
+        } else if constexpr ((... || has_explicit_serialize<
+                                         Types,
+                                         traits::visitor<Types>>())) {
+            return std::false_type{};
         } else if constexpr ((... || !byte_serializable<Types>())) {
             return std::false_type{};
-        } else if constexpr ((0 + ... + sizeof(Types)) !=
-                             sizeof(type)) {
+        } else if constexpr ((0 + ... + sizeof(Types)) != sizeof(type)) {
             return std::false_type{};
         } else if constexpr ((... || concepts::empty<Types>)) {
             return std::false_type{};
@@ -959,6 +972,9 @@ constexpr auto access::byte_serializable()
     if constexpr (members_count < 0) {
         return false;
     } else if constexpr (!std::is_trivially_copyable_v<type>) {
+        return false;
+    } else if constexpr (has_explicit_serialize<Type,
+                                                traits::visitor<Type>>()) {
         return false;
     } else if constexpr (
         !requires {
