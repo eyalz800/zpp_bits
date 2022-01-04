@@ -201,6 +201,12 @@ struct access
 
     template <typename Type>
     constexpr static auto byte_serializable();
+
+    template <typename Type>
+    struct endian_independent_byte_serializable_visitor;
+
+    template <typename Type>
+    constexpr static auto endian_independent_byte_serializable();
 };
 
 namespace traits
@@ -534,8 +540,19 @@ concept empty = requires
 template <typename Type>
 concept byte_serializable = access::byte_serializable<Type>();
 
+template <typename Type>
+concept endian_independent_byte_serializable =
+    access::endian_independent_byte_serializable<Type>();
+
+template <typename Archive>
+concept endian_aware_archive = requires
+{
+    requires std::remove_cvref_t<Archive>::endian_aware;
+};
+
 template <typename Archive, typename Type>
-concept serialize_as_bytes = byte_serializable<Type>;
+concept serialize_as_bytes = endian_independent_byte_serializable<Type> ||
+    (!endian_aware_archive<Archive> && byte_serializable<Type>);
 
 } // namespace concepts
 
@@ -658,20 +675,6 @@ struct option
     }
 };
 
-template <typename Left, typename Right>
-struct aggregated_options
-{
-    using zpp_bits_option = void;
-    constexpr auto operator()(auto && archive)
-    {
-        left(archive);
-        right(archive);
-    }
-
-    [[no_unique_address]] Left left;
-    [[no_unique_address]] Right right;
-};
-
 struct out_append : option<out_append>
 {
 };
@@ -690,17 +693,26 @@ struct out_resize : option<out_resize>
     std::size_t size{};
 };
 
-template <typename... Types>
-aggregated_options(Types...) -> aggregated_options<Types...>;
+namespace endian
+{
+struct big : option<big>
+{
+    constexpr static auto value = std::endian::big;
+};
 
-constexpr auto operator|(auto left, auto right) requires requires
+struct little : option<little>
 {
-    typename decltype(left)::zpp_bits_option;
-    typename decltype(right)::zpp_bits_option;
-}
-{
-    return aggregated_options{std::move(left), std::move(right)};
-}
+    constexpr static auto value = std::endian::little;
+};
+
+using network = big;
+
+using native = std::
+    conditional_t<std::endian::native == std::endian::little, little, big>;
+
+using swapped = std::
+    conditional_t<std::endian::native == std::endian::little, big, little>;
+} // namespace endian
 
 constexpr auto success(std::errc code)
 {
@@ -987,11 +999,70 @@ constexpr auto access::byte_serializable()
                  0)>::value == 0;
         }) {
         return false;
-    } else if constexpr (!members_count) {
-        return true;
-    } else {
+    } else if constexpr (members_count > 0) {
         return visit_members_types<type>(
             byte_serializable_visitor<type>{})();
+    } else {
+        return true;
+    }
+}
+
+template <typename Type>
+struct access::endian_independent_byte_serializable_visitor
+{
+    template <typename... Types>
+    constexpr auto operator()() {
+        using type = std::remove_cvref_t<Type>;
+
+        if constexpr (concepts::empty<type>) {
+            return std::false_type{};
+        } else if constexpr ((... || has_explicit_serialize<
+                                         Types,
+                                         traits::visitor<Types>>())) {
+            return std::false_type{};
+        } else if constexpr ((... || !endian_independent_byte_serializable<Types>())) {
+            return std::false_type{};
+        } else if constexpr ((0 + ... + sizeof(Types)) != sizeof(type)) {
+            return std::false_type{};
+        } else if constexpr ((... || concepts::empty<Types>)) {
+            return std::false_type{};
+        } else if constexpr (!concepts::byte_type<type>) {
+            return std::false_type{};
+        } else {
+            return std::true_type{};
+        }
+    }
+};
+
+template <typename Type>
+constexpr auto access::endian_independent_byte_serializable()
+{
+    constexpr auto members_count = number_of_members<Type>();
+    using type = std::remove_cvref_t<Type>;
+
+    if constexpr (members_count < 0) {
+        return false;
+    } else if constexpr (!std::is_trivially_copyable_v<type>) {
+        return false;
+    } else if constexpr (has_explicit_serialize<Type,
+                                                traits::visitor<Type>>()) {
+        return false;
+    } else if constexpr (
+        !requires {
+            requires std::integral_constant<
+                int,
+                (std::bit_cast<std::remove_all_extents_t<type>>(
+                     std::array<
+                         std::byte,
+                         sizeof(std::remove_all_extents_t<type>)>()),
+                 0)>::value == 0;
+        }) {
+        return false;
+    } else if constexpr (members_count > 0) {
+        return visit_members_types<type>(
+            endian_independent_byte_serializable_visitor<type>{})();
+    } else {
+        return concepts::byte_type<type>;
     }
 }
 
@@ -1013,7 +1084,7 @@ constexpr decltype(auto) visit_members_types(auto && visitor)
     return access::visit_members_types<Type>(visitor);
 }
 
-template <concepts::byte_view ByteView>
+template <concepts::byte_view ByteView, typename... Options>
 class basic_out
 {
 public:
@@ -1039,6 +1110,10 @@ public:
 
     using byte_type = typename ByteView::value_type;
 
+    static constexpr auto endian_aware =
+        (... ||
+         std::same_as<std::remove_cvref_t<Options>, endian::swapped>);
+
     constexpr static bool is_resizable = requires(ByteView view)
     {
         view.resize(1);
@@ -1050,24 +1125,15 @@ public:
                            std::remove_cvref_t<decltype(
                                std::span{std::declval<ByteView &>()})>>;
 
-    constexpr explicit basic_out(ByteView && view) : m_data(view)
+    constexpr explicit basic_out(ByteView && view, Options && ... options) : m_data(view)
     {
         static_assert(!is_resizable);
+        (options(*this), ...);
     }
 
-    constexpr explicit basic_out(ByteView & view) : m_data(view)
+    constexpr explicit basic_out(ByteView & view, Options && ... options) : m_data(view)
     {
-    }
-
-    constexpr explicit basic_out(ByteView && view, auto options) : m_data(view)
-    {
-        static_assert(!is_resizable);
-        options(*this);
-    }
-
-    constexpr explicit basic_out(ByteView & view, auto options) : m_data(view)
-    {
-        options(*this);
+        (options(*this), ...);
     }
 
     constexpr auto ZPP_BITS_INLINE operator()(auto &&... items)
@@ -1172,11 +1238,23 @@ protected:
                     std::array<std::remove_const_t<byte_type>,
                                sizeof(item)>>(item);
                 for (std::size_t i = 0; i < sizeof(value); ++i) {
-                    m_data[m_position + i] = value[i];
+                    if constexpr (endian_aware) {
+                        m_data[m_position + i] = value[sizeof(value) - 1 - i];
+                    } else {
+                        m_data[m_position + i] = value[i];
+                    }
                 }
             } else {
-                std::memcpy(
-                    m_data.data() + m_position, &item, sizeof(item));
+                if constexpr (endian_aware) {
+                    std::reverse_copy(
+                        reinterpret_cast<const byte_type *>(&item),
+                        reinterpret_cast<const byte_type *>(&item) +
+                            sizeof(item),
+                        m_data.data() + m_position);
+                } else {
+                    std::memcpy(
+                        m_data.data() + m_position, &item, sizeof(item));
+                }
             }
             m_position += sizeof(item);
             return {};
@@ -1185,6 +1263,11 @@ protected:
                                      bytes<typename type::value_type>,
                                      type>>;
                              }) {
+            static_assert(
+                !endian_aware ||
+                concepts::byte_type<
+                    std::remove_cvref_t<decltype(*item.data())>>);
+
             auto size = m_data.size();
             auto item_size_in_bytes = item.size_in_bytes();
             if (item_size_in_bytes > size - m_position) [[unlikely]] {
@@ -1218,7 +1301,8 @@ protected:
             return {};
         } else if constexpr (concepts::empty<type>) {
             return {};
-        } else if constexpr (concepts::byte_serializable<type>) {
+        } else if constexpr (concepts::serialize_as_bytes<decltype(*this),
+                                                          type>) {
             return serialize_one(as_bytes(item));
         } else {
             return visit_members(
@@ -1362,16 +1446,17 @@ protected:
     std::size_t m_position{};
 };
 
-template <concepts::byte_view ByteView = std::vector<std::byte>>
-class out : public basic_out<ByteView>
+template <concepts::byte_view ByteView = std::vector<std::byte>, typename... Options>
+class out : public basic_out<ByteView, Options...>
 {
 public:
     template <typename... Types>
     using template_type = out<Types...>;
 
-    friend access;
+    using base = basic_out<ByteView, Options...>;
+    using base::basic_out;
 
-    using basic_out<ByteView>::basic_out;
+    friend access;
 
     constexpr auto ZPP_BITS_INLINE operator()(auto &&... items)
     {
@@ -1388,34 +1473,37 @@ public:
     }
 
 private:
-    using basic_out<ByteView>::is_resizable;
-    using basic_out<ByteView>::serialize_many;
-    using basic_out<ByteView>::m_data;
-    using basic_out<ByteView>::m_position;
+    using base::is_resizable;
+    using base::serialize_many;
+    using base::m_data;
+    using base::m_position;
 };
 
-template <typename Type>
-out(Type &) -> out<Type>;
+template <typename Type, typename... Options>
+out(Type &, Options &&...) -> out<Type, Options...>;
 
-template <typename Type>
-out(Type &&) -> out<Type>;
+template <typename Type, typename... Options>
+out(Type &&, Options &&...) -> out<Type, Options...>;
 
-template <typename Type, std::size_t Size>
-out(Type (&)[Size]) -> out<std::span<Type, Size>>;
+template <typename Type, std::size_t Size, typename... Options>
+out(Type (&)[Size], Options &&...)
+    -> out<std::span<Type, Size>, Options...>;
 
-template <typename Type, typename SizeType>
-out(sized_container<Type, SizeType> &)
-    -> out<typename sized_container<Type, SizeType>::base>;
+template <typename Type, typename SizeType, typename... Options>
+out(sized_container<Type, SizeType> &, Options &&...)
+    -> out<typename sized_container<Type, SizeType>::base, Options...>;
 
-template <typename Type, typename SizeType>
-out(const sized_container<Type, SizeType> &)
-    -> out<const typename sized_container<Type, SizeType>::base>;
+template <typename Type, typename SizeType, typename... Options>
+out(const sized_container<Type, SizeType> &, Options &&...)
+    -> out<const typename sized_container<Type, SizeType>::base,
+           Options...>;
 
-template <typename Type, typename SizeType>
-out(sized_container<Type, SizeType> &&)
-    -> out<typename sized_container<Type, SizeType>::base>;
+template <typename Type, typename SizeType, typename... Options>
+out(sized_container<Type, SizeType> &&, Options && ...)
+    -> out<typename sized_container<Type, SizeType>::base, Options...>;
 
-template <concepts::byte_view ByteView = std::vector<std::byte>>
+template <concepts::byte_view ByteView = std::vector<std::byte>,
+          typename... Options>
 class in
 {
 public:
@@ -1441,24 +1529,19 @@ public:
 
     using byte_type = std::add_const_t<typename ByteView::value_type>;
 
-    constexpr explicit in(ByteView && view) : m_data(view)
+    static constexpr auto endian_aware =
+        (... ||
+         std::same_as<std::remove_cvref_t<Options>, endian::swapped>);
+
+    constexpr explicit in(ByteView && view, Options && ... options) : m_data(view)
     {
         static_assert(!is_resizable);
+        (options(*this), ...);
     }
 
-    constexpr explicit in(ByteView & view) : m_data(view)
+    constexpr explicit in(ByteView & view, Options && ... options) : m_data(view)
     {
-    }
-
-    constexpr explicit in(ByteView && view, auto options) : m_data(view)
-    {
-        static_assert(!is_resizable);
-        options(*this);
-    }
-
-    constexpr explicit in(ByteView & view, auto options) : m_data(view)
-    {
-        options(*this);
+        (options(*this), ...);
     }
 
     constexpr auto ZPP_BITS_INLINE operator()(auto &&... items)
@@ -1548,12 +1631,26 @@ private:
                 std::array<std::remove_const_t<byte_type>, sizeof(item)>
                     value;
                 for (std::size_t i = 0; i < sizeof(value); ++i) {
-                    value[i] = byte_type(m_data[m_position + i]);
+                    if constexpr (endian_aware) {
+                        value[sizeof(value) - 1 - i] =
+                            byte_type(m_data[m_position + i]);
+                    } else {
+                        value[i] = byte_type(m_data[m_position + i]);
+                    }
                 }
                 item = std::bit_cast<type>(value);
             } else {
-                std::memcpy(
-                    &item, m_data.data() + m_position, sizeof(item));
+                if constexpr (endian_aware) {
+                    auto begin = m_data.data() + m_position;
+                    std::reverse_copy(
+                        begin,
+                        begin + sizeof(item),
+                        reinterpret_cast<std::remove_const_t<byte_type> *>(
+                            &item));
+                } else {
+                    std::memcpy(
+                        &item, m_data.data() + m_position, sizeof(item));
+                }
             }
             m_position += sizeof(item);
             return {};
@@ -1562,6 +1659,11 @@ private:
                                      bytes<typename type::value_type>,
                                      type>>;
                              }) {
+            static_assert(
+                !endian_aware ||
+                concepts::byte_type<
+                    std::remove_cvref_t<decltype(*item.data())>>);
+
             auto size = m_data.size();
             auto item_size_in_bytes = item.size_in_bytes();
             if (item_size_in_bytes > size - m_position) [[unlikely]] {
@@ -1594,7 +1696,8 @@ private:
             return {};
         } else if constexpr (concepts::empty<type>) {
             return {};
-        } else if constexpr (concepts::byte_serializable<type>) {
+        } else if constexpr (concepts::serialize_as_bytes<decltype(*this),
+                                                          type>) {
             return serialize_one(as_bytes(item));
         } else {
             return visit_members(
@@ -1974,20 +2077,20 @@ private:
     std::size_t m_position{};
 };
 
-template <typename Type, std::size_t Size>
-in(Type (&)[Size]) -> in<std::span<Type, Size>>;
+template <typename Type, std::size_t Size, typename... Options>
+in(Type (&)[Size], Options && ...) -> in<std::span<Type, Size>, Options...>;
 
-template <typename Type, typename SizeType>
-in(sized_container<Type, SizeType> &)
-    -> in<typename sized_container<Type, SizeType>::base>;
+template <typename Type, typename SizeType, typename... Options>
+in(sized_container<Type, SizeType> &, Options && ...)
+    -> in<typename sized_container<Type, SizeType>::base, Options...>;
 
-template <typename Type, typename SizeType>
-in(const sized_container<Type, SizeType> &)
-    -> in<const typename sized_container<Type, SizeType>::base>;
+template <typename Type, typename SizeType, typename... Options>
+in(const sized_container<Type, SizeType> &, Options && ...)
+    -> in<const typename sized_container<Type, SizeType>::base, Options...>;
 
-template <typename Type, typename SizeType>
-in(sized_container<Type, SizeType> &&)
-    -> in<typename sized_container<Type, SizeType>::base>;
+template <typename Type, typename SizeType, typename... Options>
+in(sized_container<Type, SizeType> &&, Options && ...)
+    -> in<typename sized_container<Type, SizeType>::base, Options...>;
 
 constexpr auto input(auto && view, auto &&... option)
 {
@@ -2003,8 +2106,7 @@ constexpr auto output(auto && view, auto &&... option)
 
 constexpr auto in_out(auto && view, auto &&... option)
 {
-    return std::tuple{in(std::forward<decltype(view)>(view),
-                         std::forward<decltype(option)>(option)...),
+    return std::tuple{in(view, option...),
                       out(std::forward<decltype(view)>(view),
                           std::forward<decltype(option)>(option)...)};
 }
@@ -2015,14 +2117,14 @@ constexpr auto data_in_out(auto &&... option)
     struct data_in_out
     {
         data_in_out(decltype(option) &&... option) :
-            input(data, std::forward<decltype(option)>(option)...),
+            input(data, option...),
             output(data, std::forward<decltype(option)>(option)...)
         {
         }
 
         std::vector<ByteType> data;
-        in<decltype(data)> input;
-        out<decltype(data)> output;
+        in<decltype(data), decltype(option) &...> input;
+        out<decltype(data), decltype(option)...> output;
     };
     return data_in_out{std::forward<decltype(option)>(option)...};
 }
@@ -2038,7 +2140,7 @@ constexpr auto data_in(auto &&... option)
         }
 
         std::vector<ByteType> data;
-        in<decltype(data)> input;
+        in<decltype(data), decltype(option)...> input;
     };
     return data_in{std::forward<decltype(option)>(option)...};
 }
@@ -2054,7 +2156,7 @@ constexpr auto data_out(auto &&... option)
         }
 
         std::vector<ByteType> data;
-        out<decltype(data)> output;
+        out<decltype(data), decltype(option)...> output;
     };
     return data_out{std::forward<decltype(option)>(option)...};
 }
@@ -3202,6 +3304,8 @@ struct rpc_checker
 template <typename... Bindings>
 using rpc = typename rpc_checker<Bindings...>::type;
 
+namespace numbers
+{
 template <typename Type>
 struct big_endian
 {
@@ -3336,6 +3440,7 @@ struct big_endian
 
     Type value{};
 };
+} // namespace numbers
 
 template <auto Object, typename Digest = std::array<std::byte, 20>>
 requires requires
@@ -3344,6 +3449,7 @@ requires requires
 }
 constexpr auto sha1()
 {
+    using numbers::big_endian;
     auto rotate_left = [](auto n, auto c) {
         return (n << c) | (n >> ((sizeof(n) * CHAR_BIT) - c));
     };
@@ -3432,6 +3538,7 @@ requires requires
 }
 constexpr auto sha256()
 {
+    using numbers::big_endian;
     auto rotate_right = [](auto n, auto c) {
         return (n >> c) | (n << ((sizeof(n) * CHAR_BIT) - c));
     };
