@@ -450,6 +450,27 @@ struct visitor
 
     [[no_unique_address]] Visitor visitor;
 };
+
+constexpr auto get_default_size_type()
+{
+    return default_size_type{};
+}
+
+constexpr auto get_default_size_type(auto option, auto... options)
+{
+    if constexpr (requires {
+                      typename decltype(option)::default_size_type;
+                  }) {
+        return typename decltype(option)::default_size_type{};
+    } else {
+        return get_default_size_type(options...);
+    }
+}
+
+template <typename... Options>
+using default_size_type_t =
+    decltype(get_default_size_type(std::declval<Options>()...));
+
 } // namespace traits
 
 namespace concepts
@@ -713,6 +734,31 @@ using native = std::
 using swapped = std::
     conditional_t<std::endian::native == std::endian::little, big, little>;
 } // namespace endian
+
+struct size1b : option<size1b>
+{
+    using default_size_type = unsigned char;
+};
+
+struct size2b : option<size2b>
+{
+    using default_size_type = std::uint16_t;
+};
+
+struct size4b : option<size4b>
+{
+    using default_size_type = std::uint32_t;
+};
+
+struct size8b : option<size8b>
+{
+    using default_size_type = std::uint64_t;
+};
+
+struct size_native : option<size_native>
+{
+    using default_size_type = std::size_t;
+};
 
 constexpr auto success(std::errc code)
 {
@@ -1113,6 +1159,8 @@ public:
     static constexpr auto endian_aware =
         (... ||
          std::same_as<std::remove_cvref_t<Options>, endian::swapped>);
+
+    using default_size_type = traits::default_size_type_t<Options...>;
 
     constexpr static bool is_resizable = requires(ByteView view)
     {
@@ -1532,6 +1580,8 @@ public:
     static constexpr auto endian_aware =
         (... ||
          std::same_as<std::remove_cvref_t<Options>, endian::swapped>);
+
+    using default_size_type = traits::default_size_type_t<Options...>;
 
     constexpr explicit in(ByteView && view, Options && ... options) : m_data(view)
     {
