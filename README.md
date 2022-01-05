@@ -4,7 +4,7 @@ zpp::bits
 [![.github/workflows/actions.yml](https://github.com/eyalz800/zpp_bits/actions/workflows/actions.yml/badge.svg)](https://github.com/eyalz800/zpp_bits/actions/workflows/actions.yml)
 [![Build Status](https://dev.azure.com/eyalz800/zpp_bits/_apis/build/status/eyalz800.zpp_bits?branchName=main)](https://dev.azure.com/eyalz800/zpp_bits/_build/latest?definitionId=9&branchName=main)
 
-A modern C++20 binary serialization library, with just one header file.
+A modern C++20 binary serialization and RPC library, with just one header file.
 
 This library is a successor to [zpp::serializer](https://github.com/eyalz800/serializer).
 The library tries to be simpler for use, but has more or less similar API to its predecessor.
@@ -25,6 +25,7 @@ Contents
 * [Variant Types and Version Control](#variant-types-and-version-control)
 * [Literal Operators](#literal-operators)
 * [Apply to Functions](#apply-to-functions)
+* [Remote Procedure Call (RPC)](#remote-procedure-call-rpc)
 * [Byte Order Customization](#byte-order-customization)
 * [Deserializing View Of Const Bytes](#deserializing-views-of-const-bytes)
 * [Pointers as Optionals](#pointers-as-optionals)
@@ -708,6 +709,8 @@ When your function receives no parameters, the effect is just calling the functi
 without deserialization and the return value is the return value of your function.
 When the function returns void, there is no value for the resulting type.
 
+Remote Procedure Call (RPC)
+---------------------------
 The library also provides a thin RPC (remote procedure call) interface to allow serializing
 and deserializing function calls:
 ```cpp
