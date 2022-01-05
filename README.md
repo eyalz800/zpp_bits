@@ -327,7 +327,7 @@ std::array<char, 0x1000> data;
 std::array<unsigned char, 0x1000> data;
 std::span<std::byte> data = /*...*/;
 std::span<char> data = /*...*/;
-std::span<unsigned char> data = /*.../*;
+std::span<unsigned char> data = /*...*/;
 
 // Automatically works with either `std::byte`, `char`, `unsigned char`.
 zpp::bits::in in(data);
