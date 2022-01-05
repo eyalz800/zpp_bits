@@ -696,7 +696,7 @@ struct option
     }
 };
 
-struct appand : option<appand>
+struct append : option<append>
 {
 };
 struct reserve : option<reserve>
@@ -1242,7 +1242,7 @@ protected:
         return {};
     }
 
-    constexpr auto option(appand)
+    constexpr auto option(append)
     {
         static_assert(is_resizable);
         m_position = m_data.size();
@@ -2156,9 +2156,11 @@ constexpr auto output(auto && view, auto &&... option)
 
 constexpr auto in_out(auto && view, auto &&... option)
 {
-    return std::tuple{in(view, option...),
-                      out(std::forward<decltype(view)>(view),
-                          std::forward<decltype(option)>(option)...)};
+    return std::tuple{
+        in<std::remove_reference_t<typename decltype(in{view})::view_type>,
+           decltype(option) &...>(view, option...),
+        out(std::forward<decltype(view)>(view),
+            std::forward<decltype(option)>(option)...)};
 }
 
 template <typename ByteType = std::byte>

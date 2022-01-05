@@ -23,12 +23,13 @@ Contents
 * [Standard Library Types Serialization](#standard-library-types-serialization)
 * [Serialization as Bytes](#serialization-as-bytes)
 * [Variant Types and Version Control](#variant-types-and-version-control)
-* [Apply to Functions](#apply-to-functions)
 * [Literal Operators](#literal-operators)
+* [Apply to Functions](#apply-to-functions)
 * [Byte Order Customization](#byte-order-customization)
 * [Deserializing View Of Const Bytes](#deserializing-views-of-const-bytes)
 * [Pointers as Optionals](#pointers-as-optionals)
 * [Reflection](#pointers-as-optionals)
+* [Additional Archive Controls](#additional-archive-controls)
 * [Benchmark](#benchmark)
 
 Motivation
@@ -335,6 +336,10 @@ zpp::bits::out out(data);
 
 When using a vector or string, it automatically grows to the right size, however, with the above
 the data is limited to the boundaries of the arrays or spans.
+
+When creating the archive in any of the ways above, it is possible to pass a variadic
+number of parameters that control the archive behavior, such as for byte order, default size types,
+specifying append behavior and so on. This is discussed in the rest of the README.
 
 Constexpr Serialization
 -----------------------
@@ -934,6 +939,23 @@ static_assert(is_two_integers);
 The example above works with or without `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`, depending
 on the `#if`. As noted above, we must rely on specific compiler feature to detect the
 number of members which may not be portable.
+
+Additional Archive Controls
+---------------------------
+Archives can be constructed with additional control options such as `zpp::bits::append{}`
+which instructs output archives to set the position to the end of the vector or other data
+source. (for input archives this option has no effect)
+```cpp
+std::vector<std::byte> data;
+zpp::bits::out out(data, zpp::bits::append{});
+```
+
+It is possible to use multiple controls and to use them also with `data_in_out/data_in/data_out/in_out`:
+```cpp
+zpp::bits::out out(data, zpp::bits::append{}, zpp::bits::endian::big{});
+auto [in, out] = in_out(data, zpp::bits::append{}, zpp::bits::endian::big{});
+auto [data, in, out] = data_in_out(zpp::bits::size2b{}, zpp::bits::endian::big{});
+```
 
 Benchmark
 ---------
