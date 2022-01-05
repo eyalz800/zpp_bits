@@ -348,6 +348,29 @@ zpp::bits::native_span<T>; // span with native (size_type) byte size.
 Serialization of fixed size types such as arrays, `std::array`s, `std::tuple`s don't include
 any overhead except the elements followed by each other.
 
+* Changing the default size type for the whole archive is possible during creation:
+```cpp
+zpp::bits::in in(data, zpp::bits::size1b{}); // Use 1 byte for size.
+zpp::bits::out out(data, zpp::bits::size1b{}); // Use 1 byte for size.
+
+zpp::bits::in in(data, zpp::bits::size2b{}); // Use 2 bytes for size.
+zpp::bits::out out(data, zpp::bits::size2b{}); // Use 2 bytes for size.
+
+zpp::bits::in in(data, zpp::bits::size4b{}); // Use 4 bytes for size.
+zpp::bits::out out(data, zpp::bits::size4b{}); // Use 4 bytes for size.
+
+zpp::bits::in in(data, zpp::bits::size8b{}); // Use 8 bytes for size.
+zpp::bits::out out(data, zpp::bits::size8b{}); // Use 8 bytes for size.
+
+zpp::bits::in in(data, zpp::bits::size_native{}); // Use std::size_t for size.
+zpp::bits::out out(data, zpp::bits::size_native{}); // Use std::size_t for size.
+
+// Can also do it together, for example for 2 bytes size:
+auto [data, in, out] = zpp::bits::data_in_out(zpp::bits::size2b{});
+auto [data, out] = zpp::bits::data_out(zpp::bits::size2b{});
+auto [data, in] = zpp::bits::data_in(zpp::bits::size2b{});
+```
+
 * Serialization using argument dependent lookup is also possible, using both
 the automatic member serialization way or with fully defined serialization functions.
 
@@ -748,10 +771,19 @@ in(zpp::bits::unsized(s)).or_throw();
 You may choose another byte order using `zpp::bits::endian` during construction like so:
 ```cpp
 zpp::bits::in in(data, zpp::bits::endian::big{}); // Use big endian
+zpp::bits::out out(data, zpp::bits::endian::big{}); // Use big endian
+
 zpp::bits::in in(data, zpp::bits::endian::network{}); // Use big endian (provided for convenience)
+zpp::bits::out out(data, zpp::bits::endian::network{}); // Use big endian (provided for convenience)
+
 zpp::bits::in in(data, zpp::bits::endian::little{}); // Use little endian
+zpp::bits::out out(data, zpp::bits::endian::little{}); // Use little endian
+
 zpp::bits::in in(data, zpp::bits::endian::swapped{}); // If little use big otherwise little.
+zpp::bits::out out(data, zpp::bits::endian::swapped{}); // If little use big otherwise little.
+
 zpp::bits::in in(data, zpp::bits::endian::native{}); // Use the native one (default).
+zpp::bits::out out(data, zpp::bits::endian::native{}); // Use the native one (default).
 
 // Can also do it together, for example big endian:
 auto [data, in, out] = zpp::bits::data_in_out(zpp::bits::endian::big{});
