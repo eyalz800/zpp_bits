@@ -483,9 +483,9 @@ zpp::bits::in in(data, zpp::bits::size_native{}); // Use std::size_t for size.
 zpp::bits::out out(data, zpp::bits::size_native{}); // Use std::size_t for size.
 
 // Can also do it together, for example for 2 bytes size:
-auto [data, in, out] = zpp::bits::data_in_out(zpp::bits::size2b{});
-auto [data, out] = zpp::bits::data_out(zpp::bits::size2b{});
-auto [data, in] = zpp::bits::data_in(zpp::bits::size2b{});
+auto [data, in, out] = data_in_out(zpp::bits::size2b{});
+auto [data, out] = data_out(zpp::bits::size2b{});
+auto [data, in] = data_in(zpp::bits::size2b{});
 ```
 
 Serialization as Bytes
@@ -845,9 +845,9 @@ zpp::bits::in in(data, zpp::bits::endian::native{}); // Use the native one (defa
 zpp::bits::out out(data, zpp::bits::endian::native{}); // Use the native one (default).
 
 // Can also do it together, for example big endian:
-auto [data, in, out] = zpp::bits::data_in_out(zpp::bits::endian::big{});
-auto [data, out] = zpp::bits::data_out(zpp::bits::endian::big{});
-auto [data, in] = zpp::bits::data_in(zpp::bits::endian::big{});
+auto [data, in, out] = data_in_out(zpp::bits::endian::big{});
+auto [data, out] = data_out(zpp::bits::endian::big{});
+auto [data, in] = data_in(zpp::bits::endian::big{});
 ```
 
 Deserializing Views Of Const Bytes
