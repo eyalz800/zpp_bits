@@ -675,19 +675,19 @@ struct option
     }
 };
 
-struct out_append : option<out_append>
+struct appand : option<appand>
 {
 };
-struct out_reserve : option<out_reserve>
+struct reserve : option<reserve>
 {
-    constexpr explicit out_reserve(std::size_t size) : size(size)
+    constexpr explicit reserve(std::size_t size) : size(size)
     {
     }
     std::size_t size{};
 };
-struct out_resize : option<out_resize>
+struct resize : option<resize>
 {
-    constexpr explicit out_resize(std::size_t size) : size(size)
+    constexpr explicit resize(std::size_t size) : size(size)
     {
     }
     std::size_t size{};
@@ -1194,22 +1194,22 @@ protected:
         return {};
     }
 
-    constexpr auto option(out_append)
+    constexpr auto option(appand)
     {
         static_assert(is_resizable);
         m_position = m_data.size();
     }
 
-    constexpr auto option(out_reserve size)
+    constexpr auto option(reserve size)
     {
         static_assert(is_resizable);
         m_data.reserve(size.size);
     }
 
-    constexpr auto option(out_resize size)
+    constexpr auto option(resize size)
     {
         static_assert(is_resizable);
-        m_data.out_resize(size.size);
+        m_data.resize(size.size);
         if (m_position > size.size) {
             m_position = size.size;
         }
