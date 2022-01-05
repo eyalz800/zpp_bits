@@ -12,13 +12,30 @@ The library tries to be simpler for use, but has more or less similar API to its
 Contents
 --------
 * [Motivation](#motivation)
-* [Features](#features)
+* [Introduction](#introduction)
+* [Error Handling](#error-handling)
+* [Serializing Non-Aggregates](#serializing-non-aggregates)
+* [Serializing Private Classes](#serializing-private_classes)
+* [Explicit Serialization](#explicit-serialization)
+* [Archive Creation](#archive-creation)
+* [Constexpr Serialization](#constexpr-serialization)
+* [Position Control](#position-control)
+* [Standard Library Types Serialization](#standard-library-types-serialization)
+* [Serialization as Bytes](#serialization-as-bytes)
+* [Variant Types and Version Control](#variant-types-and-version-control)
+* [Apply to Functions](#apply-to-functions)
+* [Literal Operators](#literal-operators)
+* [Byte Order Customization](#byte-order-customization)
+* [Deserializing View Of Const Bytes](#deserializing-views-of-const-bytes)
+* [Pointers as Optionals](#pointers-as-optionals)
+* [Reflection](#pointers-as-optionals)
 * [Benchmark](#benchmark)
 
 Motivation
 ----------
 * Serialize any object from and to binary form as seamless as possible.
 * Provide lightweight remote procedure call (RPC) capabilities
+* Be the fastest possible - see the [benchmark](#benchmark)
 
 ### The Difference From zpp::serializer
 * It is simpler
@@ -33,9 +50,9 @@ Motivation
 polymorphic types with fixed 8 bytes of sha1 serialization id.
 * Lightweight RPC capabilities
 
-Features
---------
-* For many types, enabling serialization is zero lines, these types are required to be of aggregate type.
+Introduction
+------------
+For many types, enabling serialization is zero lines, these types are required to be of aggregate type.
 Here is an example of a `person` class with name and age:
 ```cpp
 struct person
@@ -45,7 +62,7 @@ struct person
 };
 ```
 
-* Example how to serialize the person into and from a vector of bytes:
+Example how to serialize the person into and from a vector of bytes:
 ```cpp
 // The `data_in_out` utility function creates a vector of bytes, the input and output archives
 // and returns them so we can decompose them easily in one line using structured binding like so:
@@ -63,9 +80,14 @@ in(p1, p2);
 ```
 
 This example almost works, we are being warned that we are discarding the return value.
+For error checking keep reading.
+
+Error Handling
+--------------
 We need to check for errors, the library offers multiple ways to do so - a return value
 based, exception based, or [zpp::throwing](https://github.com/eyalz800/zpp_throwing) based.
 
+### Using return values
 The return value based way for being most explicit, or if you just prefer return values:
 ```cpp
 auto [data, in, out] = zpp::bits::data_in_out();
@@ -85,6 +107,7 @@ if (failure(result)) {
 }
 ```
 
+### Using exceptions
 The exceptions based way using `.or_throw()` (read this as "succeed or throw" - hence `or_throw()`):
 ```cpp
 int main()
@@ -111,6 +134,7 @@ int main()
 }
 ```
 
+### Using zpp::throwing
 Another option is [zpp::throwing](https://github.com/eyalz800/zpp_throwing) it turns into two simple `co_await`s,
 to understand how to check for error we provide a full main function:
 ```cpp
@@ -138,7 +162,9 @@ int main()
 }
 ```
 
-* For most non-aggregate types, enabling serialization is a one liner. Here is an example of a non-aggregate
+Serializing Non-Aggregates
+--------------------------
+For most non-aggregate types, enabling serialization is a one liner. Here is an example of a non-aggregate
 `person` class:
 ```cpp
 struct person
@@ -155,7 +181,24 @@ struct person
 Most of the time types we serialize can work with structured binding, and this library takes advantage
 of that, but you need to provide the number of members in your class for this to work using the method above.
 
-* In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and `unevaluated lambda expression`. It means
+This also works with argument dependent lookup, allowing to not modify the source class:
+```cpp
+namespace my_namespace
+{
+struct person
+{
+    person(auto && ...){/*...*/} // Make non-aggregate.
+
+    std::string name;
+    int age{};
+};
+
+// Add this line somewhere before the actual serialization happens.
+auto serialize(const person & person) -> zpp::bits::members<2>;
+} // namespace my_namespace
+```
+
+In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and `unevaluated lambda expression`. It means
 that even with aggregate types the number of members can be detected automatically in cases where all members are in the same struct.
 To opt-in, define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`.
 ```cpp
@@ -171,7 +214,9 @@ struct person
 This works with `clang 13`, however the portability of this is not clear, since in `gcc` it does not work (it is a hard error) and it explicitly states
 in the standard that there is intent not to allow *SFINAE* in similar cases, so it is turned off by default.
 
-* If your data members or default constructor are private, you need to become friend with `zpp::bits::access`
+Serializing Private Classes
+---------------------------
+If your data members or default constructor are private, you need to become friend with `zpp::bits::access`
 like so:
 ```cpp
 struct private_person
@@ -186,7 +231,10 @@ private:
 };
 ```
 
-* To enable save & load of any object, even ones without structured binding, add the following lines to your class
+Explicit Serialization
+----------------------
+To enable save & load of any object using explicit serialization, which works
+regardless of structured binding compatibility, add the following lines to your class:
 ```cpp
     constexpr static auto serialize(auto & archive, auto & self)
     {
@@ -195,7 +243,7 @@ private:
 ```
 Note that `object_1, object_2, ...` are the non-static data members of your class.
 
-* Here is the example of a person class again with explicit serialization function:
+Here is the example of a person class again with explicit serialization function:
 ```cpp
 struct person
 {
@@ -209,7 +257,31 @@ struct person
 };
 ```
 
-* Constructing input and output archives together and separately from data:
+Or with argument dependent lookup:
+```cpp
+namespace my_namespace
+{
+struct person
+{
+    std::string name;
+    int age{};
+};
+
+constexpr auto serialize(auto & archive, person & person)
+{
+    return archive(person.name, person.age);
+}
+
+constexpr auto serialize(auto & archive, const person & person)
+{
+    return archive(person.name, person.age);
+}
+} // namespace my_namespace
+```
+
+Archive Creation
+----------------
+Creating input and output archives together and separately from data:
 ```cpp
 // Create both a vector of bytes, input and output archives.
 auto [data, in, out] = zpp::bits::data_in_out();
@@ -229,7 +301,7 @@ auto [data, in] = zpp::bits::data_in();
 auto [data, out] = zpp::bits::data_out();
 ```
 
-* Archives can be constructed from either one of the byte types:
+Archives can be created from either one of the byte types:
 ```cpp
 // Either one of these work with the below.
 std::vector<std::byte> data;
@@ -241,10 +313,32 @@ std::string data;
 zpp::bits::in in(data);
 zpp::bits::out out(data);
 ```
-You can also use fixed size data objects such as `std::array` and view types such as `std::span`
-similar to the above. You just need to make sure there is enough size since they are non resizable.
 
-* As was said above, the library is almost completely constexpr, here is an example
+You can also use fixed size data objects such as array, `std::array` and view types such as `std::span`
+similar to the above. You just need to make sure there is enough size since they are non resizable:
+```cpp
+// Either one of these work with the below.
+std::byte data[0x1000];
+char data[0x1000];
+unsigned char data[0x1000];
+std::array<std::byte, 0x1000> data;
+std::array<char, 0x1000> data;
+std::array<unsigned char, 0x1000> data;
+std::span<std::byte> data = /*...*/;
+std::span<char> data = /*...*/;
+std::span<unsigned char> data = /*.../*;
+
+// Automatically works with either `std::byte`, `char`, `unsigned char`.
+zpp::bits::in in(data);
+zpp::bits::out out(data);
+```
+
+When using a vector or string, it automatically grows to the right size, however, with the above
+the data is limited to the boundaries of the arrays or spans.
+
+Constexpr Serialization
+-----------------------
+As was said above, the library is almost completely constexpr, here is an example
 of using array as data object but also using it in compile time to serialize and deserialize
 a tuple of integers:
 ```cpp
@@ -263,31 +357,49 @@ constexpr auto tuple_integers()
 static_assert(tuple_integers() == std::tuple{1,2,3,4,5});
 ```
 
-* When using a vector, it automatically grows to the right size, however, you
-can also output and input from a span, in which case your memory size is
-limited by the memory span:
+For convenience, the library also provides some simplified serialization functions for
+compile time:
 ```cpp
-zpp::bits::in in(std::span{pointer, size});
-zpp::bits::out out(std::span{pointer, size});
+using namespace zpp::bits::literals;
+
+// Returns an array
+// where the first bytes are those of the hello world string and then
+// the 1337 as 4 byte integer.
+constexpr std::array data =
+    zpp::bits::to_bytes<"Hello World!"_s, 1337>();
+
+static_assert(
+    zpp::bits::from_bytes<data,
+                          zpp::bits::string_literal<char, 12>,
+                          int>() == std::tuple{"Hello World!"_s, 1337});
 ```
 
-* Query the position of `in` and `out` using `position()`, in other words
+Position Control
+----------------
+Query the position of `in` and `out` using `position()`, in other words
 the bytes read and written respectively:
 ```cpp
 std::size_t bytes_read = in.position();
 std::size_t bytes_written = out.position();
 ```
 
-* Reset the position backwards or forwards, or to the beginning:
+Reset the position backwards or forwards, or to the beginning, use with extreme care:
 ```cpp
 in.reset(); // reset to beginning.
 in.reset(position); // reset to position.
+in.position() -= sizeof(int); // Go back an integer.
+in.position() += sizeof(int); // Go forward an integer.
 
 out.reset(); // reset to beginning.
 out.reset(position); // reset to position.
+out.position() -= sizeof(int); // Go back an integer.
+out.position() += sizeof(int); // Go forward an integer.
 ```
 
-* When serializing STL containers, strings and view types such as span and string view, the library
+Standard Library Types Serialization
+------------------------------------
+When serializing variable length standard library types, such as vectors,
+strings and view types such as span and string view, the library
 first stores 4 byte integer representing the size, followed by the elements.
 ```cpp
 std::vector v = {1,2,3,4};
@@ -298,7 +410,7 @@ The reason why the default size type is of 4 bytes (i.e `std::uint32_t`) is for 
 different architectures, as well as most programs almost never reach a case of a container being
 more than 2^32 items, and it may be unjust to pay the price of 8 bytes size by default.
 
-* For specific size types that are not 4 bytes, use `zpp::bits::sized`/`zpp::bits::sized_t` like so:
+For specific size types that are not 4 bytes, use `zpp::bits::sized`/`zpp::bits::sized_t` like so:
 ```cpp
 // Using `sized` function:
 std::vector<int> v = {1,2,3,4};
@@ -314,7 +426,7 @@ in(v);
 Make sure that the size type is large enough for the serialized object, otherwise less items
 will be serialized, according to conversion rules of unsigned types.
 
-* You can also choose to not serialize the size at all, like so:
+You can also choose to not serialize the size at all, like so:
 ```cpp
 // Using `unsized` function:
 std::vector<int> v = {1,2,3,4};
@@ -348,7 +460,7 @@ zpp::bits::native_span<T>; // span with native (size_type) byte size.
 Serialization of fixed size types such as arrays, `std::array`s, `std::tuple`s don't include
 any overhead except the elements followed by each other.
 
-* Changing the default size type for the whole archive is possible during creation:
+Changing the default size type for the whole archive is possible during creation:
 ```cpp
 zpp::bits::in in(data, zpp::bits::size1b{}); // Use 1 byte for size.
 zpp::bits::out out(data, zpp::bits::size1b{}); // Use 1 byte for size.
@@ -371,46 +483,13 @@ auto [data, out] = zpp::bits::data_out(zpp::bits::size2b{});
 auto [data, in] = zpp::bits::data_in(zpp::bits::size2b{});
 ```
 
-* Serialization using argument dependent lookup is also possible, using both
-the automatic member serialization way or with fully defined serialization functions.
+Serialization as Bytes
+----------------------
+Most of the types the library knows how to optimize and serialize objects as bytes.
+It is however disabled when using explicit serialization functions.
 
-With automatic member serialization:
-```cpp
-namespace my_namespace
-{
-struct adl
-{
-    int x;
-    int y;
-};
-
-constexpr auto serialize(const adl & adl) -> zpp::bits::members<2>;
-} // namespace my_namespace
-```
-
-With fully defined serialization functions:
-```cpp
-namespace my_namespace
-{
-struct adl
-{
-    int x;
-    int y;
-};
-
-constexpr auto serialize(auto & archive, adl & adl)
-{
-    return archive(adl.x, adl.y);
-}
-
-constexpr auto serialize(auto & archive, const adl & adl)
-{
-    return archive(adl.x, adl.y);
-}
-} // namespace my_namespace
-```
-
-* If you know your type is serializable just as raw bytes, you can opt in and optimize
+If you know your type is serializable just as raw bytes, and you are using
+explicit serialization, you can opt in and optimize
 its serialization to a mere `memcpy`:
 ```cpp
 struct point
@@ -427,8 +506,6 @@ struct point
     }
 };
 ```
-It is however done automatically if your class is using member based serialization with `zpp::bits::members`,
-rather than an explicit serialization function.
 
 It's also possible to do this directly from a vector or span of trivially copyable types,
 this time we use `bytes` instead of `as_bytes` because we convert the contents of the vector
@@ -442,7 +519,9 @@ However in this case the size is not serialized, this may be extended in the fut
 support serializing the size similar to other view types. If you need to serialize as bytes
 and want the size, as a workaround it's possible to cast to `std::span<std::byte>`.
 
-* While there is no perfect tool to handle backwards compatibility of structures because
+Variant Types and Version Control
+---------------------------------
+While there is no perfect tool to handle backwards compatibility of structures because
 of the zero overhead-ness of the serialization, you can use `std::variant` as a way
 to version your classes or create a nice polymorphism based dispatching, here is how:
 ```cpp
@@ -511,7 +590,7 @@ The way the variant gets serialized is by serializing its index (0 or 1) as a `s
 before serializing the actual object. This is very efficient, however sometimes
 users may want to choose explicit serialization id for that, refer to the point below
 
-* To set a custom serialization id, you need to add an additional line inside/outside your
+To set a custom serialization id, you need to add an additional line inside/outside your
 class respectively:
 ```cpp
 using namespace zpp::bits::literals;
@@ -557,7 +636,7 @@ you can use it as a serialization id. The id is serialized to `std::array<std::b
 for 1, 2, 4, and 8 bytes its underlying type is `std::byte` `std::uint16_t`, `std::uin32_t` and
 `std::uint64_t` respectively for ease of use and efficiency.
 
-* If you want to serialize the variant without an id, or if you know that a variant is going to
+If you want to serialize the variant without an id, or if you know that a variant is going to
 have a particular ID upon deserialize, you may do it using `zpp::bits::known_id` to wrap your variant:
 ```cpp
 std::variant<v1::person, v2::person> v;
@@ -573,7 +652,9 @@ in(zpp::bits::known_id<"v2::person"_sha256_int>(v));
 in(zpp::bits::known_id(zpp::bits::id_v<"v2::person"_sha256_int>, v));
 ```
 
-* Description of helper literals in the library:
+Literal Operators
+-----------------
+Description of helper literals in the library:
 ```cpp
 using namespace zpp::bits::literals;
 
@@ -586,6 +667,8 @@ using namespace zpp::bits::literals;
 "01020304"_decode_hex // Decode a hex string into bytes literal.
 ```
 
+Apply to Functions
+------------------
 * You can apply input archive contents to a function directly, using
 `zpp::bits::apply`, the function must be non-template and have exactly
 one overload:
@@ -620,7 +703,7 @@ When your function receives no parameters, the effect is just calling the functi
 without deserialization and the return value is the return value of your function.
 When the function returns void, there is no value for the resulting type.
 
-* The library also provides a thin RPC (remote procedure call) interface to allow serializing
+The library also provides a thin RPC (remote procedure call) interface to allow serializing
 and deserializing function calls:
 ```cpp
 using namespace std::literals;
@@ -736,7 +819,35 @@ using rpc = zpp::bits::rpc<
 >;
 ```
 
-* On the receiving end (input archive), the library supports view types of const byte types, such
+Byte Order Customization
+------------------------
+The default byte order used is the native processor/OS selected one.
+You may choose another byte order using `zpp::bits::endian` during construction like so:
+```cpp
+zpp::bits::in in(data, zpp::bits::endian::big{}); // Use big endian
+zpp::bits::out out(data, zpp::bits::endian::big{}); // Use big endian
+
+zpp::bits::in in(data, zpp::bits::endian::network{}); // Use big endian (provided for convenience)
+zpp::bits::out out(data, zpp::bits::endian::network{}); // Use big endian (provided for convenience)
+
+zpp::bits::in in(data, zpp::bits::endian::little{}); // Use little endian
+zpp::bits::out out(data, zpp::bits::endian::little{}); // Use little endian
+
+zpp::bits::in in(data, zpp::bits::endian::swapped{}); // If little use big otherwise little.
+zpp::bits::out out(data, zpp::bits::endian::swapped{}); // If little use big otherwise little.
+
+zpp::bits::in in(data, zpp::bits::endian::native{}); // Use the native one (default).
+zpp::bits::out out(data, zpp::bits::endian::native{}); // Use the native one (default).
+
+// Can also do it together, for example big endian:
+auto [data, in, out] = zpp::bits::data_in_out(zpp::bits::endian::big{});
+auto [data, out] = zpp::bits::data_out(zpp::bits::endian::big{});
+auto [data, in] = zpp::bits::data_in(zpp::bits::endian::big{});
+```
+
+Deserializing Views Of Const Bytes
+----------------------------------
+On the receiving end (input archive), the library supports view types of const byte types, such
 as `std::span<const std::byte>` in order to get a view at a portion of data without copying.
 This needs to be carefully used because invalidating iterators of the contained data could cause
 a use after free. It is provided to allow the optimization when needed:
@@ -767,39 +878,23 @@ in(zpp::bits::unsized(s)).or_throw();
 // std::memcmp("hello"sv.data(), s.data(), "hello"sv.size()) == 0
 ```
 
-* The default byte order used is the native processor/OS selected one.
-You may choose another byte order using `zpp::bits::endian` during construction like so:
-```cpp
-zpp::bits::in in(data, zpp::bits::endian::big{}); // Use big endian
-zpp::bits::out out(data, zpp::bits::endian::big{}); // Use big endian
+Pointers as Optionals
+---------------------
+The library does not support serializing null pointer values, however to explicitly support
+optional owning pointers, such as to create graphs and complex structures.
 
-zpp::bits::in in(data, zpp::bits::endian::network{}); // Use big endian (provided for convenience)
-zpp::bits::out out(data, zpp::bits::endian::network{}); // Use big endian (provided for convenience)
-
-zpp::bits::in in(data, zpp::bits::endian::little{}); // Use little endian
-zpp::bits::out out(data, zpp::bits::endian::little{}); // Use little endian
-
-zpp::bits::in in(data, zpp::bits::endian::swapped{}); // If little use big otherwise little.
-zpp::bits::out out(data, zpp::bits::endian::swapped{}); // If little use big otherwise little.
-
-zpp::bits::in in(data, zpp::bits::endian::native{}); // Use the native one (default).
-zpp::bits::out out(data, zpp::bits::endian::native{}); // Use the native one (default).
-
-// Can also do it together, for example big endian:
-auto [data, in, out] = zpp::bits::data_in_out(zpp::bits::endian::big{});
-auto [data, out] = zpp::bits::data_out(zpp::bits::endian::big{});
-auto [data, in] = zpp::bits::data_in(zpp::bits::endian::big{});
-```
-
-* The library does not support serializing null pointer values, however to explicitly support
-optional owning pointers, to be able to create graphs and complex structures, you can use
-either `std::optional<std::unique_ptr<T>>` or the more optimized `zpp::bits::optional_ptr<T>` which
+In theory it's valid to use `std::optional<std::unique_ptr<T>>`, but it's
+recommended to use the specifically made `zpp::bits::optional_ptr<T>` which
 optimizes out the boolean that the optional object usually keeps, and uses null pointer
-as an invalid state. Serializing a null pointer value will serialize a zero byte, while
+as an invalid state.
+
+Serializing a null pointer value in thata case will serialize a zero byte, while
 non-null values serialize as a single one byte followed by the bytes of the object.
 (i.e, serialization is identical to `std::optional<T>`).
 
-* As part of the library implementation it was required to implement some reflection types, for
+Reflection
+----------
+As part of the library implementation it was required to implement some reflection types, for
 counting members and visiting members, and the library exposes these to the user:
 ```cpp
 struct point
@@ -839,25 +934,6 @@ static_assert(is_two_integers);
 The example above works with or without `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`, depending
 on the `#if`. As noted above, we must rely on specific compiler feature to detect the
 number of members which may not be portable.
-
-* For convenience, the library also provides some simplified serialization functions for
-compile time:
-```cpp
-using namespace zpp::bits::literals;
-
-// Returns an array
-// where the first bytes are those of the hello world string and then
-// the 1337 as 4 byte integer.
-constexpr std::array data =
-    zpp::bits::to_bytes<"Hello World!"_s, 1337>();
-
-static_assert(
-    zpp::bits::from_bytes<data,
-                          zpp::bits::string_literal<char, 12>,
-                          int>() == std::tuple{"Hello World!"_s, 1337});
-```
-
-* This should cover most of the basic stuff, more documentation may come in the future.
 
 Benchmark
 ---------
