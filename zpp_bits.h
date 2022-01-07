@@ -2435,10 +2435,12 @@ constexpr auto ZPP_BITS_INLINE serialize(
                                          Type>(self.value);
     auto value = std::make_unsigned_t<Type>(orig_value);
     if constexpr (varint_encoding::zig_zag == Encoding) {
-        if constexpr (sizeof(Type) == 4) {
+        if constexpr (sizeof(Type) == 2) {
+            value = (value << 1) ^ (orig_value >> 15);
+        } else if constexpr (sizeof(Type) == 4) {
             value = (value << 1) ^ (orig_value >> 31);
         } else if constexpr (sizeof(Type) == 8) {
-            value = (value << 1) ^ (orig_value >> 31);
+            value = (value << 1) ^ (orig_value >> 63);
         } else {
             static_assert(sizeof(Type) == 0);
         }
