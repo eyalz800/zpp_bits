@@ -10,6 +10,85 @@ static_assert(zpp::bits::from_bytes<"96818000"_decode_hex, zpp::bits::vint32_t>(
 
 static_assert(zpp::bits::to_bytes<zpp::bits::varint{150}>() == "9601"_decode_hex);
 
+static_assert(zpp::bits::varint_size(
+                  std::numeric_limits<std::uint32_t>::max()) == 5);
+
+static_assert(zpp::bits::varint_size(
+                  std::numeric_limits<std::uint64_t>::max()) == 10);
+
+static_assert(zpp::bits::varint_size(0) == 1);
+static_assert(zpp::bits::varint_size(0x7f) == 1);
+static_assert(zpp::bits::varint_size(0x80) == 2);
+static_assert(zpp::bits::varint_size(0x3fff) == 2);
+static_assert(zpp::bits::varint_size(0x1fffff) == 3);
+static_assert(zpp::bits::varint_size(0x3fffff) == 4);
+static_assert(zpp::bits::varint_size(0xfffffff) == 4);
+static_assert(zpp::bits::varint_size(0x1fffffff) == 5);
+static_assert(zpp::bits::varint_size(0xffffffff) == 5);
+static_assert(zpp::bits::varint_size(-1) == 5);
+
+static_assert(
+    zpp::bits::to_bytes<zpp::bits::vint32_t{-1}>() == "ffffffff0f"_decode_hex);
+
+static_assert(zpp::bits::from_bytes<"ffffffff0f"_decode_hex,
+                                    zpp::bits::vint32_t>() == -1);
+
+static_assert(zpp::bits::to_bytes<zpp::bits::vint64_t{-1}>() ==
+              "ffffffffffffffffff01"_decode_hex);
+
+static_assert(zpp::bits::from_bytes<"ffffffffffffffffff01"_decode_hex,
+                                    zpp::bits::vint64_t>() == -1);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint32_t{0}>(),
+                          zpp::bits::vint32_t>() == 0);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint32_t{1}>(),
+                          zpp::bits::vint32_t>() == 1);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint32_t{-1}>(),
+                          zpp::bits::vint32_t>() == -1);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint32_t{0x7f}>(),
+                          zpp::bits::vint32_t>() == 0x7f);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint64_t{0x80}>(),
+                          zpp::bits::vint64_t>() == 0x80);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint64_t{0}>(),
+                          zpp::bits::vint64_t>() == 0);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint64_t{1}>(),
+                          zpp::bits::vint64_t>() == 1);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint64_t{-1}>(),
+                          zpp::bits::vint64_t>() == -1);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint64_t{0x7f}>(),
+                          zpp::bits::vint64_t>() == 0x7f);
+
+static_assert(
+    zpp::bits::from_bytes<
+    zpp::bits::to_bytes<zpp::bits::vint64_t{0x80}>(),
+                          zpp::bits::vint64_t>() == 0x80);
+
 static_assert(zpp::bits::to_bytes<zpp::bits::vsint32_t{0}>() ==
               zpp::bits::to_bytes<zpp::bits::vint32_t{0}>());
 
@@ -46,6 +125,32 @@ static_assert(zpp::bits::to_bytes<zpp::bits::vsint64_t{2147483647}>() ==
 static_assert(zpp::bits::to_bytes<zpp::bits::vsint64_t{-2147483648}>() ==
               zpp::bits::to_bytes<zpp::bits::vuint64_t{4294967295}>());
 
+static_assert(
+    zpp::bits::from_bytes<zpp::bits::to_bytes<zpp::bits::vsint32_t{0}>(),
+                          zpp::bits::vsint32_t>() == 0);
+
+static_assert(zpp::bits::to_bytes<zpp::bits::vsint32_t{-1}>() ==
+              zpp::bits::to_bytes<zpp::bits::vint32_t{1}>());
+
+static_assert(
+    zpp::bits::from_bytes<zpp::bits::to_bytes<zpp::bits::vsint32_t{1}>(),
+                          zpp::bits::vsint32_t>() == 1);
+
+static_assert(
+    zpp::bits::from_bytes<zpp::bits::to_bytes<zpp::bits::vsint32_t{2}>(),
+                          zpp::bits::vsint32_t>() == 2);
+
+static_assert(
+    zpp::bits::from_bytes<zpp::bits::to_bytes<zpp::bits::vsint32_t{2147483647}>(),
+                          zpp::bits::vsint32_t>() == 2147483647);
+
+static_assert(
+    zpp::bits::from_bytes<zpp::bits::to_bytes<zpp::bits::vsint32_t{-2}>(),
+                          zpp::bits::vsint32_t>() == -2);
+
+static_assert(
+    zpp::bits::from_bytes<zpp::bits::to_bytes<zpp::bits::vsint32_t{-2147483648}>(),
+                          zpp::bits::vsint32_t>() == -2147483648);
 static_assert(
     zpp::bits::to_bytes<zpp::bits::varint<std::byte>{std::byte{0x7f}}>() ==
     "7f"_decode_hex);
