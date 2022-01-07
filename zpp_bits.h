@@ -2290,8 +2290,6 @@ constexpr auto to_bytes()
 template <auto Data, typename Type>
 constexpr auto from_bytes()
 {
-    static_assert(success(in{Data}(Type{})));
-
     Type object;
     in{Data}(object).or_throw();
     return object;
@@ -2300,8 +2298,6 @@ constexpr auto from_bytes()
 template <auto Data, typename... Types>
 constexpr auto from_bytes() requires (sizeof...(Types) > 1)
 {
-    static_assert(success(in{Data}(std::tuple{Types{}...})));
-
     std::tuple<Types...> object;
     in{Data}(object).or_throw();
     return object;
@@ -2414,65 +2410,51 @@ struct varint
     Type value{};
 };
 
+constexpr auto ZPP_BITS_INLINE varint_size(auto value)
+{
+    return ((sizeof(value) * CHAR_BIT) -
+            std::countl_zero(
+                std::make_unsigned_t<decltype(value)>(value | 0x1)) +
+            (CHAR_BIT - 2)) /
+           (CHAR_BIT - 1);
+}
+
 template <typename Archive, typename Type, varint_encoding Encoding>
 constexpr auto ZPP_BITS_INLINE serialize(
     Archive & archive,
     varint<Type, Encoding> self) requires(Archive::kind() == kind::out)
 {
-    if constexpr (Archive::resizable) {
-        constexpr auto max_size =
-            std::max(to_bytes<varint<Type, Encoding>{
-                         std::numeric_limits<Type>::max()}>()
-                         .size(),
-                     to_bytes<varint<Type, Encoding>{
-                         std::numeric_limits<Type>::min()}>()
-                         .size());
-        archive.enlarge_for(max_size);
-    }
-
     auto orig_value = std::conditional_t<std::is_enum_v<Type>,
                                          traits::underlying_type_t<Type>,
                                          Type>(self.value);
     auto value = std::make_unsigned_t<Type>(orig_value);
     if constexpr (varint_encoding::zig_zag == Encoding) {
-        if constexpr (sizeof(Type) == 2) {
-            value = (value << 1) ^ (orig_value >> 15);
-        } else if constexpr (sizeof(Type) == 4) {
-            value = (value << 1) ^ (orig_value >> 31);
-        } else if constexpr (sizeof(Type) == 8) {
-            value = (value << 1) ^ (orig_value >> 63);
-        } else {
-            static_assert(sizeof(Type) == 0);
-        }
+        value =
+            (value << 1) ^ (orig_value >> (sizeof(Type) * CHAR_BIT - 1));
+    }
+
+    auto size = varint_size(value);
+    if constexpr (Archive::resizable) {
+        archive.enlarge_for(size);
     }
 
     auto data = archive.remaining_data();
-    for (auto & byte_value : data) {
-        auto char_value = static_cast<unsigned char>(value & 0x7f);
-        value >>= (CHAR_BIT - 1);
-        if (value) [[unlikely]] {
-            char_value |= 0x80;
-            byte_value =
-                static_cast<std::remove_cvref_t<decltype(byte_value)>>(
-                    char_value);
-            continue;
+    if constexpr (!Archive::resizable) {
+        if (data.size() < size) [[unlikely]] {
+            return errc{std::errc::value_too_large};
         }
-        byte_value =
-            static_cast<std::remove_cvref_t<decltype(byte_value)>>(
-                char_value);
-        archive.position() +=
-            1 + std::distance(data.data(), std::addressof(byte_value));
-        return errc{};
     }
 
-    if constexpr (Archive::resizable) {
-#if defined __clang__ || defined __GNUC__
-        __builtin_unreachable();
-#endif
-        return errc{};
-    } else {
-        return errc{std::errc::value_too_large};
+    for (std::size_t i = 0; i < size; ++i) {
+        auto char_value = static_cast<unsigned char>(value & 0x7f);
+        value >>= (CHAR_BIT - 1);
+        char_value |= (value != 0) << 7;
+        data[i] = static_cast<std::remove_cvref_t<decltype(data[i])>>(
+            char_value);
     }
+
+    archive.position() += size;
+    return errc{};
 }
 
 template <typename Archive, typename Type, varint_encoding Encoding>
@@ -2487,20 +2469,22 @@ constexpr auto ZPP_BITS_INLINE serialize(
     auto data = archive.remaining_data();
     std::size_t shift = 0;
     for (auto & byte_value : data) {
-        value |= (static_cast<unsigned char>(byte_value) & 0x7f) << shift;
-        if (static_cast<unsigned char>(byte_value) >= 0x80) [[unlikely]] {
-            shift += CHAR_BIT - 1;
-            if (shift >= sizeof(value) * CHAR_BIT) [[unlikely]] {
-                return errc{std::errc::protocol_error};
-            }
+        auto char_value = static_cast<unsigned char>(byte_value);
+        value |= decltype(value)(char_value & 0x7f) << shift;
+        if (char_value >= 0x80) [[unlikely]] {
+            shift = (shift + (CHAR_BIT - 1)) % (sizeof(Type) * CHAR_BIT);
             continue;
         }
-
-        self.value = decltype(self.value)(value);
-        archive.position() +=
-            1 + std::distance(data.data(), std::addressof(byte_value));
+        if constexpr (varint_encoding::zig_zag == Encoding) {
+            self.value =
+                decltype(self.value)((value >> 1) ^ -(value & 0x1));
+        } else {
+            self.value = decltype(self.value)(value);
+        }
+        archive.position() += 1 + std::distance(data.data(), &byte_value);
         return errc{};
     }
+
     return errc{std::errc::value_too_large};
 }
 
