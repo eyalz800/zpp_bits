@@ -411,6 +411,8 @@ struct visitor
     using byte_type = std::byte;
     using view_type = std::span<std::byte>;
 
+    static constexpr bool resizable = false;
+
     constexpr auto operator()(auto && ... arguments) const
     {
         if constexpr (requires {
@@ -446,6 +448,7 @@ struct visitor
     std::span<std::byte> processed_data();
     std::size_t position() const;
     std::size_t & position();
+    void enlarge_for(std::size_t);
     void reset(std::size_t = 0);
 
     [[no_unique_address]] Visitor visitor;
@@ -470,6 +473,19 @@ constexpr auto get_default_size_type(auto option, auto... options)
 template <typename... Options>
 using default_size_type_t =
     decltype(get_default_size_type(std::declval<Options>()...));
+
+template <typename Type>
+constexpr auto underlying_type_generic()
+{
+    if constexpr (std::is_enum_v<Type>) {
+        return std::underlying_type_t<Type>{};
+    } else {
+        return Type{};
+    }
+}
+
+template <typename Type>
+using underlying_type_t = decltype(underlying_type_generic<Type>());
 
 } // namespace traits
 
@@ -871,8 +887,6 @@ serialize(Archive & archive,
 template <concepts::container Container, typename SizeType>
 struct sized_container : public Container
 {
-    static_assert(std::is_unsigned_v<SizeType> || std::is_void_v<SizeType>);
-
     using base = Container;
     using base::base;
 
@@ -904,8 +918,6 @@ using unsized_t = sized_t<Container, void>;
 template <concepts::container Container, typename SizeType>
 struct sized_container_ref
 {
-    static_assert(std::is_unsigned_v<SizeType> || std::is_void_v<SizeType>);
-
     constexpr explicit sized_container_ref(Container && value) :
         value(std::forward<Container>(value))
     {
@@ -1162,20 +1174,20 @@ public:
 
     using default_size_type = traits::default_size_type_t<Options...>;
 
-    constexpr static bool is_resizable = requires(ByteView view)
+    constexpr static bool resizable = requires(ByteView view)
     {
         view.resize(1);
     };
 
     using view_type =
-        std::conditional_t<is_resizable,
+        std::conditional_t<resizable,
                            ByteView &,
                            std::remove_cvref_t<decltype(
                                std::span{std::declval<ByteView &>()})>>;
 
     constexpr explicit basic_out(ByteView && view, Options && ... options) : m_data(view)
     {
-        static_assert(!is_resizable);
+        static_assert(!resizable);
         (options(*this), ...);
     }
 
@@ -1225,6 +1237,14 @@ public:
         return kind::out;
     }
 
+    constexpr void ZPP_BITS_INLINE enlarge_for(auto additional_size)
+    {
+        auto size = m_data.size();
+        if (additional_size > size - m_position) [[unlikely]] {
+            m_data.resize((additional_size + size) * 3 / 2);
+        }
+    }
+
 protected:
     constexpr auto ZPP_BITS_INLINE serialize_many(auto && first_item,
                                                   auto &&... items)
@@ -1244,19 +1264,19 @@ protected:
 
     constexpr auto option(append)
     {
-        static_assert(is_resizable);
+        static_assert(resizable);
         m_position = m_data.size();
     }
 
     constexpr auto option(reserve size)
     {
-        static_assert(is_resizable);
+        static_assert(resizable);
         m_data.reserve(size.size);
     }
 
     constexpr auto option(resize size)
     {
-        static_assert(is_resizable);
+        static_assert(resizable);
         m_data.resize(size.size);
         if (m_position > size.size) {
             m_position = size.size;
@@ -1275,7 +1295,7 @@ protected:
         } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
             auto size = m_data.size();
             if (sizeof(item) > size - m_position) [[unlikely]] {
-                if constexpr (is_resizable) {
+                if constexpr (resizable) {
                     m_data.resize((sizeof(item) + size) * 3 / 2);
                 } else {
                     return std::errc::result_out_of_range;
@@ -1319,7 +1339,7 @@ protected:
             auto size = m_data.size();
             auto item_size_in_bytes = item.size_in_bytes();
             if (item_size_in_bytes > size - m_position) [[unlikely]] {
-                if constexpr (is_resizable) {
+                if constexpr (resizable) {
                     m_data.resize((item_size_in_bytes + size) * 3 / 2);
                 } else {
                     return std::errc::result_out_of_range;
@@ -1506,9 +1526,11 @@ public:
 
     friend access;
 
+    using base::resizable;
+
     constexpr auto ZPP_BITS_INLINE operator()(auto &&... items)
     {
-        if constexpr (is_resizable) {
+        if constexpr (resizable) {
             auto end = m_data.size();
             auto result = serialize_many(items...);
             if (m_position > end) {
@@ -1521,7 +1543,6 @@ public:
     }
 
 private:
-    using base::is_resizable;
     using base::serialize_many;
     using base::m_data;
     using base::m_position;
@@ -1585,7 +1606,7 @@ public:
 
     constexpr explicit in(ByteView && view, Options && ... options) : m_data(view)
     {
-        static_assert(!is_resizable);
+        static_assert(!resizable);
         (options(*this), ...);
     }
 
@@ -1635,13 +1656,13 @@ public:
         return kind::in;
     }
 
-    constexpr static bool is_resizable = requires(ByteView view)
+    constexpr static bool resizable = requires(ByteView view)
     {
         view.resize(1);
     };
 
     using view_type =
-        std::conditional_t<is_resizable,
+        std::conditional_t<resizable,
                            ByteView &,
                            std::remove_cvref_t<decltype(
                                std::span{std::declval<ByteView &>()})>>;
@@ -1900,7 +1921,7 @@ private:
             access::destruct(*pointer);
         };
 
-        for (SizeType index{}; index < size; ++index)
+        for (std::size_t index{}; index < size; ++index)
         {
             if constexpr (requires { typename type::mapped_type; }) {
                 using value_type = std::pair<typename type::key_type,
@@ -2216,14 +2237,12 @@ constexpr auto data_out(auto &&... option)
 template <auto Object, std::size_t MaxSize = 0x1000>
 constexpr auto to_bytes_one()
 {
-    constexpr auto error_size = [] {
+    constexpr auto size = [] {
         std::array<std::byte, MaxSize> data;
         out out{data};
-        return std::tuple{out(Object), out.position()};
+        out(Object).or_throw();
+        return out.position();
     }();
-    constexpr auto error = std::get<0>(error_size);
-    constexpr auto size = std::get<1>(error_size);
-    static_assert(success(error));
 
     if constexpr (!size) {
         return string_literal<std::byte, 0>{};
@@ -2366,6 +2385,144 @@ constexpr auto known_id(Id && id, Variant && variant)
     return known_dynamic_id_variant<Id, std::remove_reference_t<Variant>>(
         variant, id);
 }
+
+enum varint_encoding
+{
+    normal,
+    zig_zag,
+};
+
+template <typename Type, varint_encoding Encoding = varint_encoding::normal>
+struct varint
+{
+    varint() = default;
+
+    constexpr varint(Type value) : value(value)
+    {
+    }
+
+    constexpr operator Type &() &
+    {
+        return value;
+    }
+
+    constexpr operator Type() const
+    {
+        return value;
+    }
+
+    Type value{};
+};
+
+template <typename Archive, typename Type, varint_encoding Encoding>
+constexpr auto ZPP_BITS_INLINE serialize(
+    Archive & archive,
+    varint<Type, Encoding> self) requires(Archive::kind() == kind::out)
+{
+    if constexpr (Archive::resizable) {
+        constexpr auto max_size =
+            std::max(to_bytes<varint<Type, Encoding>{
+                         std::numeric_limits<Type>::max()}>()
+                         .size(),
+                     to_bytes<varint<Type, Encoding>{
+                         std::numeric_limits<Type>::min()}>()
+                         .size());
+        archive.enlarge_for(max_size);
+    }
+
+    auto orig_value = std::conditional_t<std::is_enum_v<Type>,
+                                         traits::underlying_type_t<Type>,
+                                         Type>(self.value);
+    auto value = std::make_unsigned_t<Type>(orig_value);
+    if constexpr (varint_encoding::zig_zag == Encoding) {
+        if constexpr (sizeof(Type) == 4) {
+            value = (value << 1) ^ (orig_value >> 31);
+        } else if constexpr (sizeof(Type) == 8) {
+            value = (value << 1) ^ (orig_value >> 31);
+        } else {
+            static_assert(sizeof(Type) == 0);
+        }
+    }
+
+    auto data = archive.remaining_data();
+    for (auto & byte_value : data) {
+        auto char_value = static_cast<unsigned char>(value & 0x7f);
+        value >>= (CHAR_BIT - 1);
+        if (value) [[unlikely]] {
+            char_value |= 0x80;
+            byte_value =
+                static_cast<std::remove_cvref_t<decltype(byte_value)>>(
+                    char_value);
+            continue;
+        }
+        byte_value =
+            static_cast<std::remove_cvref_t<decltype(byte_value)>>(
+                char_value);
+        archive.position() +=
+            1 + std::distance(data.data(), std::addressof(byte_value));
+        return errc{};
+    }
+
+    if constexpr (Archive::resizable) {
+#if defined __clang__ || defined __GNUC__
+        __builtin_unreachable();
+#endif
+        return errc{};
+    } else {
+        return errc{std::errc::value_too_large};
+    }
+}
+
+template <typename Archive, typename Type, varint_encoding Encoding>
+constexpr auto ZPP_BITS_INLINE serialize(
+    Archive & archive,
+    varint<Type, Encoding> & self) requires(Archive::kind() == kind::in)
+{
+    auto value = std::conditional_t<
+        std::is_enum_v<Type>,
+        std::make_unsigned_t<traits::underlying_type_t<Type>>,
+        std::make_unsigned_t<Type>>{};
+    auto data = archive.remaining_data();
+    std::size_t shift = 0;
+    for (auto & byte_value : data) {
+        value |= (static_cast<unsigned char>(byte_value) & 0x7f) << shift;
+        if (static_cast<unsigned char>(byte_value) >= 0x80) [[unlikely]] {
+            shift += CHAR_BIT - 1;
+            if (shift >= sizeof(value) * CHAR_BIT) [[unlikely]] {
+                return errc{std::errc::protocol_error};
+            }
+            continue;
+        }
+
+        self.value = decltype(self.value)(value);
+        archive.position() +=
+            1 + std::distance(data.data(), std::addressof(byte_value));
+        return errc{};
+    }
+    return errc{std::errc::value_too_large};
+}
+
+template <typename Archive, typename Type, varint_encoding Encoding>
+constexpr auto
+serialize(Archive & archive,
+          varint<Type, Encoding> && self) requires(Archive::kind() ==
+                                                   kind::in) = delete;
+
+using vint32_t = varint<std::int32_t>;
+using vint64_t = varint<std::int64_t>;
+
+using vuint32_t = varint<std::uint32_t>;
+using vuint64_t = varint<std::uint64_t>;
+
+using vsint32_t = varint<std::int32_t, varint_encoding::zig_zag>;
+using vsint64_t = varint<std::int64_t, varint_encoding::zig_zag>;
+
+using vsize_t = varint<std::size_t>;
+
+struct size_varint : option<size_varint>
+{
+    using default_size_type = vsize_t;
+};
 
 template <typename Function>
 struct function_traits;

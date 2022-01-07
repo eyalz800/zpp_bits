@@ -31,6 +31,7 @@ Contents
 * [Pointers as Optionals](#pointers-as-optionals)
 * [Reflection](#pointers-as-optionals)
 * [Additional Archive Controls](#additional-archive-controls)
+* [Variable Length Integers](#variable-length-integers)
 * [Benchmark](#benchmark)
 
 Motivation
@@ -958,6 +959,46 @@ It is possible to use multiple controls and to use them also with `data_in_out/d
 zpp::bits::out out(data, zpp::bits::append{}, zpp::bits::endian::big{});
 auto [in, out] = in_out(data, zpp::bits::append{}, zpp::bits::endian::big{});
 auto [data, in, out] = data_in_out(zpp::bits::size2b{}, zpp::bits::endian::big{});
+```
+
+Variable Length Integers
+------------------------
+The library provides a type for serializing and deserializing variable
+length integers:
+```cpp
+auto [data, in, out] = zpp::bits::data_in_out();
+out(zpp::bits::varint{150}).or_throw();
+
+zpp::bits::varint i{0};
+in(i).or_throw();
+
+// i == 150;
+```
+
+The class template `zpp::bits::varint<T, E = varint_encoding::normal>` is provided
+to be able to define any varint integral type or enumeration type,
+along with possible encodings `zpp::bits::varint_encoding::normal/zig_zag` (normal is default).
+
+The following alias declarations are provided:
+```cpp
+using vint32_t = varint<std::int32_t>; // varint of int32 types.
+using vint64_t = varint<std::int64_t>; // varint of int64 types.
+
+using vuint32_t = varint<std::uint32_t>; // varint of unsigned int32 types.
+using vuint64_t = varint<std::uint64_t>; // varint of unsigned int64 types.
+
+using vsint32_t = varint<std::int32_t, varint_encoding::zig_zag>; // zig zag encoded varint of int32 types.
+using vsint64_t = varint<std::int64_t, varint_encoding::zig_zag>; // zig zag encoded varint of int64 types.
+
+using vsize_t = varint<std::size_t>; // varint of std::size_t types.
+```
+
+Using varints to serialize sizes by default is also possible during archive creation:
+```cpp
+auto [data, in, out] = data_in_out(zpp::bits::size_varint{});
+
+zpp::bits::in in(data, zpp::bits::size_varint{}); // Uses varint to encode size.
+zpp::bits::out out(data, zpp::bits::size_varint{}); // Uses varint to encode size.
 ```
 
 Benchmark
