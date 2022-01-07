@@ -975,6 +975,11 @@ in(i).or_throw();
 // i == 150;
 ```
 
+Here is an example of the encoding at compile time:
+```cpp
+static_assert(zpp::bits::to_bytes<zpp::bits::varint{150}>() == "9601"_decode_hex);
+```
+
 The class template `zpp::bits::varint<T, E = varint_encoding::normal>` is provided
 to be able to define any varint integral type or enumeration type,
 along with possible encodings `zpp::bits::varint_encoding::normal/zig_zag` (normal is default).
