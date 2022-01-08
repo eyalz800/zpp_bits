@@ -32,6 +32,7 @@ Contents
 * [Reflection](#pointers-as-optionals)
 * [Additional Archive Controls](#additional-archive-controls)
 * [Variable Length Integers](#variable-length-integers)
+* [Protobuf (Experimental)](#protobuf-experimental)
 * [Benchmark](#benchmark)
 
 Motivation
@@ -483,6 +484,9 @@ zpp::bits::out out(data, zpp::bits::size8b{}); // Use 8 bytes for size.
 
 zpp::bits::in in(data, zpp::bits::size_native{}); // Use std::size_t for size.
 zpp::bits::out out(data, zpp::bits::size_native{}); // Use std::size_t for size.
+
+zpp::bits::in in(data, zpp::bits::no_size{}); // Don't use size, for very special cases, since it is very limiting.
+zpp::bits::out out(data, zpp::bits::no_size{}); // Don't use size, for very special cases, since it is very limiting.
 
 // Can also do it together, for example for 2 bytes size:
 auto [data, in, out] = data_in_out(zpp::bits::size2b{});
@@ -1005,6 +1009,106 @@ auto [data, in, out] = data_in_out(zpp::bits::size_varint{});
 zpp::bits::in in(data, zpp::bits::size_varint{}); // Uses varint to encode size.
 zpp::bits::out out(data, zpp::bits::size_varint{}); // Uses varint to encode size.
 ```
+
+Protobuf (Experimental)
+-----------------------
+The serialization format of this library is not based on any known or accepted format.
+Naturally, other languages do not support this format, which makes it near impossible to use
+the library for cross programming language communication. For this reason the library provides
+support for **protobuf** which is commonly used for binary serialization and cross language
+communication. Please note that protobuf support is highly experimental and may not include
+all of the features, and it is generally slower (around 2-5 times slower) than the stock
+format which aims to be zero overhead.
+
+Starting with the basic message:
+```cpp
+struct example
+{
+    zpp::bits::vint32_t i; // varint of 32 bit, field number is implicitly set to 1,
+    // next field is implicitly 2, and so on
+};
+
+// Serialize as protobuf protocol (as usual, can also define this inside the class
+// with `using serialize = zpp::bits::protocol<zpp::bits::pb{}>;`)
+auto serialize(const example &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+
+// Use archives as usual, specify what kind of size to prefix the message with.
+// We chose no size to demonstrate the actual encoding of the message, but in general
+// it is recommended to size prefix protobuf messages since they are not self terminating.
+auto [data, in, out] = data_in_out(zpp::bits::no_size{});
+
+out(example{.i = 150}).or_throw();
+
+example e;
+in(e).or_throw();
+
+// e.i == 150
+
+// Serialize the message without any size prefix, and check the encoding at compile time:
+static_assert(
+    zpp::bits::to_bytes<zpp::bits::unsized_t<example>{{.i = 150}}>() ==
+    "089601"_decode_hex);
+```
+
+To reserve fields:
+```cpp
+struct example
+{
+    [[no_unique_address]] zpp::bits::pb::reserved _1; // field number 1 is reserved.
+    zpp::bits::vint32_t i; // field number == 2
+    zpp::bits::vsint32_t j; // field number == 3
+};
+```
+
+Fixed members are simply regular C++ data members:
+```cpp
+struct example
+{
+    std::uint32_t i; // fixed unsigned integer 32, field number == 1
+};
+```
+
+Like with `zpp::bits::members`, for when it is required, you may specify the number of members
+in the protocol field:
+```cpp
+struct example
+{
+    using serialize = zpp::bits::protocol<zpp::bits::pb{}, 1>; // 1 member.
+
+    zpp::bits::vint32_t i; // field number == 1
+};
+```
+
+Embedded messages are simply nested within the class as data members:
+```cpp
+struct nested_example
+{
+    example nested; // field number == 1
+};
+
+auto serialize(const nested_example &)
+    -> zpp::bits::protocol<zpp::bits::pb{}>;
+
+static_assert(zpp::bits::to_bytes<zpp::bits::unsized_t<nested_example>{
+                  {.nested = example{150}}}>() == "0a03089601"_decode_hex);
+```
+
+Repeated fields are of the form of owning containers:
+```cpp
+struct repeating
+{
+    using serialize = zpp::bits::protocol<zpp::bits::pb{}>;
+
+    std::vector<zpp::bits::vint32_t> integers; // field number == 1
+    std::string characters; // field number == 2
+    std::vector<example> examples; // repeating examples, field number == 3
+};
+```
+
+Currently all missing fields are dropped and not concatenated to the message, for efficiency.
+Any value that is not set in a message leaves the target data member intact, which allows
+to implement defaults for data members by using non-static data member initializer or to initialize
+the data member before deserializing the message.
 
 Benchmark
 ---------
