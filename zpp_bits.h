@@ -32,6 +32,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <span>
 #include <system_error>
@@ -78,6 +79,13 @@ template <std::size_t Count = std::numeric_limits<std::size_t>::max()>
 struct members
 {
     constexpr static std::size_t value = Count;
+};
+
+template <auto Protocol, std::size_t Members = std::numeric_limits<std::size_t>::max()>
+struct protocol
+{
+    constexpr static auto value = Protocol;
+    constexpr static auto members = Members;
 };
 
 template <auto Id>
@@ -207,6 +215,27 @@ struct access
 
     template <typename Type>
     constexpr static auto endian_independent_byte_serializable();
+
+    template <typename Type>
+    constexpr static auto has_protocol()
+    {
+        return requires
+        {
+            requires std::same_as<
+                typename std::remove_cvref_t<Type>::serialize,
+                protocol<std::remove_cvref_t<Type>::serialize::value,
+                         std::remove_cvref_t<Type>::serialize::members>>;
+        }
+        || requires(Type && item)
+        {
+            requires std::same_as<
+                std::remove_cvref_t<decltype(serialize(item))>,
+                protocol<
+                    std::remove_cvref_t<decltype(serialize(item))>::value,
+                    std::remove_cvref_t<decltype(serialize(
+                        item))>::members>>;
+        };
+    }
 };
 
 namespace traits
@@ -464,7 +493,11 @@ constexpr auto get_default_size_type(auto option, auto... options)
     if constexpr (requires {
                       typename decltype(option)::default_size_type;
                   }) {
-        return typename decltype(option)::default_size_type{};
+        if constexpr (std::is_void_v<typename decltype(option)::default_size_type>) {
+            return std::monostate{};
+        } else {
+            return typename decltype(option)::default_size_type{};
+        }
     } else {
         return get_default_size_type(options...);
     }
@@ -472,7 +505,12 @@ constexpr auto get_default_size_type(auto option, auto... options)
 
 template <typename... Options>
 using default_size_type_t =
-    decltype(get_default_size_type(std::declval<Options>()...));
+    std::conditional_t<std::same_as<std::monostate,
+                                    decltype(get_default_size_type(
+                                        std::declval<Options>()...))>,
+                       void,
+                       decltype(get_default_size_type(
+                           std::declval<Options>()...))>;
 
 template <typename Type>
 constexpr auto underlying_type_generic()
@@ -562,10 +600,14 @@ concept owning_pointer = !optional<Type> &&
     traits::is_shared_ptr<std::remove_cvref_t<Type>>::value);
 
 template <typename Type>
+concept by_protocol = access::has_protocol<Type>() &&
+    !has_explicit_serialize<Type>;
+
+template <typename Type>
 concept unspecialized =
     !container<Type> && !owning_pointer<Type> && !tuple<Type> &&
     !variant<Type> && !optional<Type> &&
-    !std::is_array_v<std::remove_cvref_t<Type>>;
+    !std::is_array_v<std::remove_cvref_t<Type>> && !by_protocol<Type>;
 
 template <typename Type>
 concept empty = requires
@@ -751,6 +793,11 @@ using swapped = std::
     conditional_t<std::endian::native == std::endian::little, big, little>;
 } // namespace endian
 
+struct no_size : option<no_size>
+{
+    using default_size_type = void;
+};
+
 struct size1b : option<size1b>
 {
     using default_size_type = unsigned char;
@@ -832,119 +879,6 @@ constexpr auto failure(errc code)
 }
 
 template <typename Type>
-struct optional_ptr : std::unique_ptr<Type>
-{
-    using base = std::unique_ptr<Type>;
-    using base::base;
-    using base::operator=;
-
-    constexpr optional_ptr(base && other) noexcept :
-        base(std::move(other))
-    {
-    }
-};
-
-template <typename Type, typename...>
-optional_ptr(Type *) -> optional_ptr<Type>;
-
-template <typename Archive, typename Type>
-constexpr static auto ZPP_BITS_INLINE serialize(
-    Archive & archive,
-    const optional_ptr<Type> & self) requires(Archive::kind() == kind::out)
-{
-    if (!self) [[unlikely]] {
-        return archive(std::byte(false));
-    } else {
-        return archive(std::byte(true), *self);
-    }
-}
-
-template <typename Archive, typename Type>
-constexpr static auto ZPP_BITS_INLINE
-serialize(Archive & archive,
-          optional_ptr<Type> & self) requires(Archive::kind() == kind::in)
-{
-    std::byte has_value{};
-    if (auto result = archive(has_value); failure(result))
-        [[unlikely]] {
-        return result;
-    }
-
-    if (!bool(has_value)) [[unlikely]] {
-        self = {};
-        return errc{};
-    }
-
-    if (auto result =
-            archive(static_cast<std::unique_ptr<Type> &>(self));
-        failure(result)) [[unlikely]] {
-        return result;
-    }
-
-    return errc{};
-}
-
-template <concepts::container Container, typename SizeType>
-struct sized_container : public Container
-{
-    using base = Container;
-    using base::base;
-
-    constexpr sized_container(base && other) noexcept(
-        std::is_nothrow_move_constructible_v<base>) :
-        base(std::move(other))
-    {
-    }
-
-    constexpr sized_container(const base & other) :
-        base(other)
-    {
-    }
-
-    constexpr static auto ZPP_BITS_INLINE serialize(auto & serializer,
-                                                    auto & self)
-    {
-        return serializer.template serialize_one<SizeType>(
-            static_cast<base &>(self));
-    }
-};
-
-template <typename Container, typename SizeType>
-using sized_t = sized_container<Container, SizeType>;
-
-template <typename Container>
-using unsized_t = sized_t<Container, void>;
-
-template <concepts::container Container, typename SizeType>
-struct sized_container_ref
-{
-    constexpr explicit sized_container_ref(Container && value) :
-        value(std::forward<Container>(value))
-    {
-    }
-
-    constexpr static auto ZPP_BITS_INLINE serialize(auto & serializer,
-                                                    auto & self)
-    {
-        return serializer.template serialize_one<SizeType>(self.value);
-    }
-
-    Container value;
-};
-
-template <typename SizeType, typename Container>
-constexpr auto sized(Container && container)
-{
-    return sized_container_ref<Container &, SizeType>(container);
-}
-
-template <typename Container>
-constexpr auto unsized(Container && container)
-{
-    return sized_container_ref<Container &, void>(container);
-}
-
-template <typename Type>
 constexpr auto access::number_of_members()
 {
     using type = std::remove_cvref_t<Type>;
@@ -980,6 +914,28 @@ constexpr auto access::number_of_members()
                                      std::size_t>::max();
                          }) {
         return decltype(serialize(std::declval<type>()))::value;
+    } else if constexpr (requires {
+                             requires std::same_as<
+                                 typename type::serialize,
+                                 protocol<type::serialize::value,
+                                          type::serialize::members>>;
+                             requires type::serialize::members !=
+                                 std::numeric_limits<
+                                     std::size_t>::max();
+                         }) {
+        return type::serialize::members;
+    } else if constexpr (requires(Type && item) {
+                             requires std::same_as<
+                                 decltype(serialize(item)),
+                                 protocol<decltype(serialize(item))::value,
+                                          decltype(serialize(
+                                              item))::members>>;
+                             requires decltype(serialize(
+                                 item))::members !=
+                                 std::numeric_limits<
+                                     std::size_t>::max();
+                         }) {
+        return decltype(serialize(std::declval<type>()))::members;
 #if ZPP_BITS_AUTODETECT_MEMBERS_MODE == 0
     } else if constexpr (std::is_aggregate_v<type>) {
         // clang-format off
@@ -1142,10 +1098,277 @@ constexpr decltype(auto) visit_members_types(auto && visitor)
     return access::visit_members_types<Type>(visitor);
 }
 
+template <typename Type>
+struct optional_ptr : std::unique_ptr<Type>
+{
+    using base = std::unique_ptr<Type>;
+    using base::base;
+    using base::operator=;
+
+    constexpr optional_ptr(base && other) noexcept :
+        base(std::move(other))
+    {
+    }
+};
+
+template <typename Type, typename...>
+optional_ptr(Type *) -> optional_ptr<Type>;
+
+template <typename Archive, typename Type>
+constexpr static auto ZPP_BITS_INLINE serialize(
+    Archive & archive,
+    const optional_ptr<Type> & self) requires(Archive::kind() == kind::out)
+{
+    if (!self) [[unlikely]] {
+        return archive(std::byte(false));
+    } else {
+        return archive(std::byte(true), *self);
+    }
+}
+
+template <typename Archive, typename Type>
+constexpr static auto ZPP_BITS_INLINE
+serialize(Archive & archive,
+          optional_ptr<Type> & self) requires(Archive::kind() == kind::in)
+{
+    std::byte has_value{};
+    if (auto result = archive(has_value); failure(result))
+        [[unlikely]] {
+        return result;
+    }
+
+    if (!bool(has_value)) [[unlikely]] {
+        self = {};
+        return errc{};
+    }
+
+    if (auto result =
+            archive(static_cast<std::unique_ptr<Type> &>(self));
+        failure(result)) [[unlikely]] {
+        return result;
+    }
+
+    return errc{};
+}
+
+template <typename Type, typename SizeType>
+struct sized_item : public Type
+{
+    using base = Type;
+    using base::base;
+
+    constexpr sized_item(base && other) noexcept(
+        std::is_nothrow_move_constructible_v<base>) :
+        base(std::move(other))
+    {
+    }
+
+    constexpr sized_item(const base & other) :
+        base(other)
+    {
+    }
+
+    constexpr static auto ZPP_BITS_INLINE serialize(auto & archive,
+                                                    auto & self)
+    {
+        if constexpr (std::remove_cvref_t<decltype(archive)>::kind() == kind::out) {
+            return archive.template serialize_one<SizeType>(
+                static_cast<const base &>(self));
+        } else {
+            return archive.template serialize_one<SizeType>(
+                static_cast<base &>(self));
+        }
+    }
+};
+
+template <typename Type, typename SizeType>
+auto serialize(const sized_item<Type, SizeType> &)
+    -> members<number_of_members<Type>()>;
+
+template <typename Type, typename SizeType>
+using sized_t = sized_item<Type, SizeType>;
+
+template <typename Type>
+using unsized_t = sized_t<Type, void>;
+
+template <typename Type, typename SizeType>
+struct sized_item_ref
+{
+    constexpr explicit sized_item_ref(Type && value) :
+        value(std::forward<Type>(value))
+    {
+    }
+
+    constexpr static auto ZPP_BITS_INLINE serialize(auto & serializer,
+                                                    auto & self)
+    {
+        return serializer.template serialize_one<SizeType>(self.value);
+    }
+
+    Type value;
+};
+
+template <typename SizeType, typename Type>
+constexpr auto sized(Type && value)
+{
+    return sized_item_ref<Type &, SizeType>(value);
+}
+
+template <typename Type>
+constexpr auto unsized(Type && value)
+{
+    return sized_item_ref<Type &, void>(value);
+}
+
+enum varint_encoding
+{
+    normal,
+    zig_zag,
+};
+
+template <typename Type, varint_encoding Encoding = varint_encoding::normal>
+struct varint
+{
+    varint() = default;
+
+    using value_type = Type;
+
+    constexpr varint(Type value) : value(value)
+    {
+    }
+
+    constexpr operator Type &() &
+    {
+        return value;
+    }
+
+    constexpr operator Type() const
+    {
+        return value;
+    }
+
+    Type value{};
+};
+
+namespace concepts
+{
+
+template <typename Type>
+concept varint = requires
+{
+    requires std::same_as<Type,
+                          zpp::bits::varint<typename Type::value_type>>;
+};
+
+} // namespace concepts
+
+constexpr auto ZPP_BITS_INLINE varint_size(auto value)
+{
+    return ((sizeof(value) * CHAR_BIT) -
+            std::countl_zero(
+                std::make_unsigned_t<decltype(value)>(value | 0x1)) +
+            (CHAR_BIT - 2)) /
+           (CHAR_BIT - 1);
+}
+
+template <typename Archive, typename Type, varint_encoding Encoding>
+constexpr auto serialize(
+    Archive & archive,
+    varint<Type, Encoding> self) requires(Archive::kind() == kind::out)
+{
+    auto orig_value = std::conditional_t<std::is_enum_v<Type>,
+                                         traits::underlying_type_t<Type>,
+                                         Type>(self.value);
+    auto value = std::make_unsigned_t<Type>(orig_value);
+    if constexpr (varint_encoding::zig_zag == Encoding) {
+        value =
+            (value << 1) ^ (orig_value >> (sizeof(Type) * CHAR_BIT - 1));
+    }
+
+    auto size = varint_size(value);
+    if constexpr (Archive::resizable) {
+        archive.enlarge_for(size);
+    }
+
+    auto data = archive.remaining_data();
+    if constexpr (!Archive::resizable) {
+        if (data.size() < size) [[unlikely]] {
+            return errc{std::errc::value_too_large};
+        }
+    }
+
+    for (std::size_t i = 0; i < size; ++i) {
+        auto char_value = static_cast<unsigned char>(value & 0x7f);
+        value >>= (CHAR_BIT - 1);
+        char_value |= (value != 0) << (CHAR_BIT - 1);
+        data[i] = static_cast<std::remove_cvref_t<decltype(data[i])>>(
+            char_value);
+    }
+
+    archive.position() += size;
+    return errc{};
+}
+
+template <typename Archive, typename Type, varint_encoding Encoding>
+constexpr auto serialize(
+    Archive & archive,
+    varint<Type, Encoding> & self) requires(Archive::kind() == kind::in)
+{
+    auto value = std::conditional_t<
+        std::is_enum_v<Type>,
+        std::make_unsigned_t<traits::underlying_type_t<Type>>,
+        std::make_unsigned_t<Type>>{};
+    auto data = archive.remaining_data();
+    std::size_t shift = 0;
+    for (auto & byte_value : data) {
+        auto char_value = static_cast<unsigned char>(byte_value);
+        value |= decltype(value)(char_value & 0x7f) << shift;
+        if (char_value >= 0x80) [[unlikely]] {
+            shift = (shift + (CHAR_BIT - 1)) % (sizeof(Type) * CHAR_BIT);
+            continue;
+        }
+        if constexpr (varint_encoding::zig_zag == Encoding) {
+            self.value =
+                decltype(self.value)((value >> 1) ^ -(value & 0x1));
+        } else {
+            self.value = decltype(self.value)(value);
+        }
+        archive.position() += 1 + std::distance(data.data(), &byte_value);
+        return errc{};
+    }
+
+    return errc{std::errc::value_too_large};
+}
+
+template <typename Archive, typename Type, varint_encoding Encoding>
+constexpr auto
+serialize(Archive & archive,
+          varint<Type, Encoding> && self) requires(Archive::kind() ==
+                                                   kind::in) = delete;
+
+using vint32_t = varint<std::int32_t>;
+using vint64_t = varint<std::int64_t>;
+
+using vuint32_t = varint<std::uint32_t>;
+using vuint64_t = varint<std::uint64_t>;
+
+using vsint32_t = varint<std::int32_t, varint_encoding::zig_zag>;
+using vsint64_t = varint<std::int64_t, varint_encoding::zig_zag>;
+
+using vsize_t = varint<std::size_t>;
+
+struct size_varint : option<size_varint>
+{
+    using default_size_type = vsize_t;
+};
+
 template <concepts::byte_view ByteView, typename... Options>
 class basic_out
 {
 public:
+    template <concepts::byte_view, typename...>
+    friend class basic_out;
+
     template <typename>
     friend struct option;
 
@@ -1154,11 +1377,11 @@ public:
 
     friend access;
 
-    template <concepts::container, typename>
-    friend struct sized_container;
+    template <typename, typename>
+    friend struct sized_item;
 
-    template <concepts::container, typename>
-    friend struct sized_container_ref;
+    template <typename, typename>
+    friend struct sized_item_ref;
 
     template <typename, concepts::variant>
     friend struct known_id_variant;
@@ -1508,6 +1731,81 @@ protected:
         return serialize_one(*pointer);
     }
 
+    template <typename SizeType = default_size_type>
+    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::by_protocol auto && item)
+    {
+        using type = std::remove_cvref_t<decltype(item)>;
+        if constexpr (!std::is_void_v<SizeType>) {
+            auto size_position = m_position;
+            if (auto result = serialize_one(SizeType{});
+                failure(result)) [[unlikely]] {
+                return result;
+            }
+
+            if constexpr (requires { typename type::serialize; }) {
+                constexpr auto protocol = type::serialize::value;
+                if (auto result = protocol(*this, item); failure(result))
+                    [[unlikely]] {
+                    return result;
+                }
+            } else {
+                constexpr auto protocol = decltype(serialize(item))::value;
+                if (auto result = protocol(*this, item); failure(result))
+                    [[unlikely]] {
+                    return result;
+                }
+            }
+
+            auto current_position = m_position;
+            std::size_t message_size =
+                    current_position - size_position - sizeof(SizeType);
+            if constexpr (concepts::varint<SizeType>) {
+                constexpr auto preserialized_varint_size = 1;
+                message_size = current_position - size_position -
+                               preserialized_varint_size;
+                auto move_ahead_count =
+                    varint_size(message_size) - preserialized_varint_size;
+                if (move_ahead_count) {
+                    if constexpr (resizable) {
+                        enlarge_for(move_ahead_count);
+                    } else {
+                        if (move_ahead_count >
+                            m_data.size() - current_position) {
+                            return std::errc::value_too_large;
+                        }
+                    }
+                    auto data = m_data.data();
+                    auto message_start =
+                        data + size_position + preserialized_varint_size;
+                    auto message_end = data + current_position;
+                    if (std::is_constant_evaluated()) {
+                        for (auto p = message_end - 1; p >= message_start;
+                             --p) {
+                            *(p + move_ahead_count) = *p;
+                        }
+                    } else {
+                        std::memmove(message_start + move_ahead_count,
+                                     message_start,
+                                     message_size);
+                    }
+                    m_position += move_ahead_count;
+                }
+            }
+            return basic_out<std::span<byte_type, sizeof(SizeType)>>{
+                std::span<byte_type, sizeof(SizeType)>{
+                    m_data.data() + size_position, sizeof(SizeType)}}(
+                SizeType(message_size));
+        } else {
+            if constexpr (requires {typename type::serialize;}) {
+                constexpr auto protocol = type::serialize::value;
+                return protocol(*this, item);
+            } else {
+                constexpr auto protocol = decltype(serialize(item))::value;
+                return protocol(*this, item);
+            }
+        }
+    }
+
     constexpr ~basic_out() = default;
 
     view_type m_data{};
@@ -1559,17 +1857,17 @@ out(Type (&)[Size], Options &&...)
     -> out<std::span<Type, Size>, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
-out(sized_container<Type, SizeType> &, Options &&...)
-    -> out<typename sized_container<Type, SizeType>::base, Options...>;
+out(sized_item<Type, SizeType> &, Options &&...)
+    -> out<typename sized_item<Type, SizeType>::base, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
-out(const sized_container<Type, SizeType> &, Options &&...)
-    -> out<const typename sized_container<Type, SizeType>::base,
+out(const sized_item<Type, SizeType> &, Options &&...)
+    -> out<const typename sized_item<Type, SizeType>::base,
            Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
-out(sized_container<Type, SizeType> &&, Options && ...)
-    -> out<typename sized_container<Type, SizeType>::base, Options...>;
+out(sized_item<Type, SizeType> &&, Options && ...)
+    -> out<typename sized_item<Type, SizeType>::base, Options...>;
 
 template <concepts::byte_view ByteView = std::vector<std::byte>,
           typename... Options>
@@ -1584,11 +1882,11 @@ public:
 
     friend access;
 
-    template <concepts::container, typename>
-    friend struct sized_container;
+    template <typename, typename>
+    friend struct sized_item;
 
-    template <concepts::container, typename>
-    friend struct sized_container_ref;
+    template <typename, typename>
+    friend struct sized_item_ref;
 
     template <typename, concepts::variant>
     friend struct known_id_variant;
@@ -2144,6 +2442,35 @@ private:
         return {};
     }
 
+    template <typename SizeType = default_size_type>
+    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::by_protocol auto && item)
+    {
+        using type = std::remove_cvref_t<decltype(item)>;
+        if constexpr (!std::is_void_v<SizeType>) {
+            SizeType size{};
+            if (auto result = serialize_one(size); failure(result))
+                [[unlikely]] {
+                return result;
+            }
+
+            if constexpr (requires {typename type::serialize;}) {
+                constexpr auto protocol = type::serialize::value;
+                return protocol(*this, item, size);
+            } else {
+                constexpr auto protocol = decltype(serialize(item))::value;
+                return protocol(*this, item, size);
+            }
+        } else {
+            if constexpr (requires {typename type::serialize;}) {
+                constexpr auto protocol = type::serialize::value;
+                return protocol(*this, item);
+            } else {
+                constexpr auto protocol = decltype(serialize(item))::value;
+                return protocol(*this, item);
+            }
+        }
+    }
+
     view_type m_data{};
     std::size_t m_position{};
 };
@@ -2152,16 +2479,16 @@ template <typename Type, std::size_t Size, typename... Options>
 in(Type (&)[Size], Options && ...) -> in<std::span<Type, Size>, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
-in(sized_container<Type, SizeType> &, Options && ...)
-    -> in<typename sized_container<Type, SizeType>::base, Options...>;
+in(sized_item<Type, SizeType> &, Options && ...)
+    -> in<typename sized_item<Type, SizeType>::base, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
-in(const sized_container<Type, SizeType> &, Options && ...)
-    -> in<const typename sized_container<Type, SizeType>::base, Options...>;
+in(const sized_item<Type, SizeType> &, Options && ...)
+    -> in<const typename sized_item<Type, SizeType>::base, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
-in(sized_container<Type, SizeType> &&, Options && ...)
-    -> in<typename sized_container<Type, SizeType>::base, Options...>;
+in(sized_item<Type, SizeType> &&, Options && ...)
+    -> in<typename sized_item<Type, SizeType>::base, Options...>;
 
 constexpr auto input(auto && view, auto &&... option)
 {
@@ -2261,7 +2588,7 @@ constexpr auto join()
         return string_literal<std::byte, 0>{};
     } else {
         std::array<std::byte, size> data;
-        zpp::bits::out{data}(Data...).or_throw();
+        out{data}(Data...).or_throw();
         return data;
     }
 }
@@ -2381,134 +2708,6 @@ constexpr auto known_id(Id && id, Variant && variant)
     return known_dynamic_id_variant<Id, std::remove_reference_t<Variant>>(
         variant, id);
 }
-
-enum varint_encoding
-{
-    normal,
-    zig_zag,
-};
-
-template <typename Type, varint_encoding Encoding = varint_encoding::normal>
-struct varint
-{
-    varint() = default;
-
-    constexpr varint(Type value) : value(value)
-    {
-    }
-
-    constexpr operator Type &() &
-    {
-        return value;
-    }
-
-    constexpr operator Type() const
-    {
-        return value;
-    }
-
-    Type value{};
-};
-
-constexpr auto ZPP_BITS_INLINE varint_size(auto value)
-{
-    return ((sizeof(value) * CHAR_BIT) -
-            std::countl_zero(
-                std::make_unsigned_t<decltype(value)>(value | 0x1)) +
-            (CHAR_BIT - 2)) /
-           (CHAR_BIT - 1);
-}
-
-template <typename Archive, typename Type, varint_encoding Encoding>
-constexpr auto ZPP_BITS_INLINE serialize(
-    Archive & archive,
-    varint<Type, Encoding> self) requires(Archive::kind() == kind::out)
-{
-    auto orig_value = std::conditional_t<std::is_enum_v<Type>,
-                                         traits::underlying_type_t<Type>,
-                                         Type>(self.value);
-    auto value = std::make_unsigned_t<Type>(orig_value);
-    if constexpr (varint_encoding::zig_zag == Encoding) {
-        value =
-            (value << 1) ^ (orig_value >> (sizeof(Type) * CHAR_BIT - 1));
-    }
-
-    auto size = varint_size(value);
-    if constexpr (Archive::resizable) {
-        archive.enlarge_for(size);
-    }
-
-    auto data = archive.remaining_data();
-    if constexpr (!Archive::resizable) {
-        if (data.size() < size) [[unlikely]] {
-            return errc{std::errc::value_too_large};
-        }
-    }
-
-    for (std::size_t i = 0; i < size; ++i) {
-        auto char_value = static_cast<unsigned char>(value & 0x7f);
-        value >>= (CHAR_BIT - 1);
-        char_value |= (value != 0) << (CHAR_BIT - 1);
-        data[i] = static_cast<std::remove_cvref_t<decltype(data[i])>>(
-            char_value);
-    }
-
-    archive.position() += size;
-    return errc{};
-}
-
-template <typename Archive, typename Type, varint_encoding Encoding>
-constexpr auto ZPP_BITS_INLINE serialize(
-    Archive & archive,
-    varint<Type, Encoding> & self) requires(Archive::kind() == kind::in)
-{
-    auto value = std::conditional_t<
-        std::is_enum_v<Type>,
-        std::make_unsigned_t<traits::underlying_type_t<Type>>,
-        std::make_unsigned_t<Type>>{};
-    auto data = archive.remaining_data();
-    std::size_t shift = 0;
-    for (auto & byte_value : data) {
-        auto char_value = static_cast<unsigned char>(byte_value);
-        value |= decltype(value)(char_value & 0x7f) << shift;
-        if (char_value >= 0x80) [[unlikely]] {
-            shift = (shift + (CHAR_BIT - 1)) % (sizeof(Type) * CHAR_BIT);
-            continue;
-        }
-        if constexpr (varint_encoding::zig_zag == Encoding) {
-            self.value =
-                decltype(self.value)((value >> 1) ^ -(value & 0x1));
-        } else {
-            self.value = decltype(self.value)(value);
-        }
-        archive.position() += 1 + std::distance(data.data(), &byte_value);
-        return errc{};
-    }
-
-    return errc{std::errc::value_too_large};
-}
-
-template <typename Archive, typename Type, varint_encoding Encoding>
-constexpr auto
-serialize(Archive & archive,
-          varint<Type, Encoding> && self) requires(Archive::kind() ==
-                                                   kind::in) = delete;
-
-using vint32_t = varint<std::int32_t>;
-using vint64_t = varint<std::int64_t>;
-
-using vuint32_t = varint<std::uint32_t>;
-using vuint64_t = varint<std::uint64_t>;
-
-using vsint32_t = varint<std::int32_t, varint_encoding::zig_zag>;
-using vsint64_t = varint<std::int64_t, varint_encoding::zig_zag>;
-
-using vsize_t = varint<std::size_t>;
-
-struct size_varint : option<size_varint>
-{
-    using default_size_type = vsize_t;
-};
 
 template <typename Function>
 struct function_traits;
@@ -3498,6 +3697,384 @@ struct rpc_checker
 
 template <typename... Bindings>
 using rpc = typename rpc_checker<Bindings...>::type;
+
+struct pb
+{
+    using reserved = std::monostate;
+
+    enum class wire_type : unsigned int
+    {
+        varint = 0,
+        fixed_64 = 1,
+        length_delimited = 2,
+        fixed_32 = 5,
+    };
+
+    constexpr static auto make_tag(wire_type type, auto field_number)
+    {
+        return varint{(field_number << 3) |
+                      std::underlying_type_t<wire_type>(type)};
+    }
+
+    constexpr static auto tag_type(auto tag)
+    {
+        return wire_type(tag & 0x7);
+    }
+
+    constexpr static auto tag_number(auto tag)
+    {
+        return tag >> 3;
+    }
+
+    template <typename Type>
+    constexpr static auto tag_type()
+    {
+        using type = std::remove_cvref_t<Type>;
+        if constexpr (concepts::varint<type> || std::same_as<Type, bool>) {
+            return wire_type::varint;
+        } else if constexpr (std::is_integral_v<type> ||
+                             std::is_floating_point_v<type>) {
+            if constexpr (sizeof(type) == 4) {
+                return wire_type::fixed_32;
+            } else if constexpr (sizeof(type) == 8) {
+                return wire_type::fixed_64;
+            } else {
+                static_assert(!sizeof(type));
+            }
+        } else {
+            return wire_type::length_delimited;
+        }
+    }
+
+    template <typename Type>
+    constexpr static auto make_tag(auto field_number)
+    {
+        return make_tag(tag_type<Type>(), field_number);
+    }
+
+    constexpr auto ZPP_BITS_INLINE
+    operator()(auto & archive, auto & item) const requires(
+        std::remove_cvref_t<decltype(archive)>::kind() == kind::out)
+    {
+        using archive_type = typename std::remove_cvref_t<decltype(archive)>;
+        if constexpr (!concepts::varint<typename archive_type::default_size_type>) {
+            out out{archive.data(), size_varint{}};
+            out.position() = archive.position();
+            auto result = visit_members(
+                item,
+                [&](auto &&... items) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                    return serialize_many(
+                        std::make_index_sequence<sizeof...(items)>{},
+                        out,
+                        items...);
+                });
+            archive.position() = out.position();
+            return result;
+        } else {
+            return visit_members(
+                item, [&](auto &&... items) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                    return serialize_many(
+                        std::make_index_sequence<sizeof...(items)>{},
+                        archive,
+                        items...);
+                });
+        }
+    }
+
+    template <std::size_t FirstIndex, std::size_t... Indices>
+    constexpr static auto ZPP_BITS_INLINE serialize_many(
+        std::index_sequence<FirstIndex, Indices...>,
+        auto & archive,
+        auto & first_item,
+        auto &... items) requires(std::remove_cvref_t<decltype(archive)>::
+                                      kind() == kind::out)
+    {
+        using type = std::remove_cvref_t<decltype(first_item)>;
+        if constexpr (!concepts::empty<type>) {
+            if constexpr (std::is_enum_v<type> && !std::same_as<type, std::byte>) {
+                constexpr auto tag = make_tag(wire_type::varint, FirstIndex + 1);
+                if (auto result = archive(
+                        tag,
+                        varint{std::underlying_type_t<type>{first_item}});
+                    failure(result)) [[unlikely]] {
+                    return result;
+                }
+            } else if constexpr (!concepts::container<type>) {
+                constexpr auto tag = make_tag<type>(FirstIndex + 1);
+                if (auto result = archive(tag, first_item); failure(result)) [[unlikely]] {
+                    return result;
+                }
+            } else if constexpr (requires {
+                                     requires std::is_fundamental_v<
+                                         typename type::value_type> ||
+                                         std::same_as<
+                                             typename type::value_type,
+                                             std::byte>;
+                                 }) {
+                constexpr auto tag =
+                    make_tag(wire_type::length_delimited, FirstIndex + 1);
+                if (auto result =
+                        archive(tag,
+                                varint{first_item.size() *
+                                       sizeof(typename type::value_type)},
+                                unsized(first_item));
+                    failure(result)) [[unlikely]] {
+                    return result;
+                }
+            } else if constexpr (requires {
+                                     requires concepts::varint<
+                                         typename type::value_type>;
+                                 }) {
+                constexpr auto tag =
+                    make_tag(wire_type::length_delimited, FirstIndex + 1);
+
+                auto size = std::accumulate(std::begin(first_item),
+                                            std::end(first_item),
+                                            [](auto left, auto right) {
+                                                return varint_size(left) +
+                                                       varint_size(right);
+                                            });
+                if (auto result =
+                        archive(tag,
+                                varint{size},
+                                unsized(first_item));
+                    failure(result)) [[unlikely]] {
+                    return result;
+                }
+            } else if constexpr (requires {
+                                     requires std::is_enum_v<
+                                         typename type::value_type>;
+                                 }) {
+                constexpr auto tag =
+                    make_tag(wire_type::length_delimited, FirstIndex + 1);
+
+                using type = typename type::value_type;
+                auto size = std::accumulate(
+                    std::begin(first_item),
+                    std::end(first_item),
+                    [](auto left, auto right) {
+                        return varint_size(
+                                   std::underlying_type_t<type>(left)) +
+                               varint_size(
+                                   std::underlying_type_t<type>(right));
+                    });
+                if (auto result =
+                        archive(tag,
+                                varint{size});
+                    failure(result)) [[unlikely]] {
+                    return result;
+                }
+                for (auto & item : first_item) {
+                    if (auto result = archive(
+                            varint{std::underlying_type_t<type>(item)});
+                        failure(result)) [[unlikely]] {
+                        return result;
+                    }
+                }
+            } else {
+                constexpr auto tag = make_tag<typename type::value_type>(FirstIndex + 1);
+                for (auto & item : first_item) {
+                    if (auto result = archive(tag, item); failure(result))
+                        [[unlikely]] {
+                        return result;
+                    }
+                }
+            }
+        }
+
+        return serialize_many(
+            std::index_sequence<Indices...>{}, archive, items...);
+    }
+
+    constexpr static errc ZPP_BITS_INLINE
+    serialize_many(std::index_sequence<>, auto & archive) requires(
+        std::remove_cvref_t<decltype(archive)>::kind() == kind::out)
+    {
+        return {};
+    }
+
+    constexpr errc ZPP_BITS_INLINE operator()(
+        auto & archive,
+        auto & item,
+        std::size_t size = std::numeric_limits<std::size_t>::max()) const
+        requires(std::remove_cvref_t<decltype(archive)>::kind() ==
+                 kind::in)
+    {
+        auto data = archive.remaining_data();
+        in in{std::span{data.data(), std::min(size, data.size())},
+              size_varint{}};
+        auto result = serialize_fields(in, item);
+        archive.position() += in.position();
+        return result;
+    }
+
+    constexpr static errc ZPP_BITS_INLINE
+    serialize_fields(auto & archive, auto & item) requires(
+        std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
+    {
+        auto size = archive.data().size();
+        visit_members(
+            item, [](auto &&... members) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                (
+                    [](auto && member) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                        using type = std::remove_cvref_t<decltype(member)>;
+                        if constexpr (concepts::container<type> &&
+                                      !std::is_fundamental_v<type> &&
+                                      !std::same_as<type, std::byte> &&
+                                      requires { member.clear(); }) {
+                            member.clear();
+                        }
+                    }(members),
+                    ...);
+            });
+
+        while (archive.position() < size) {
+            vuint32_t tag;
+            if (auto result = archive(tag); failure(result)) [[unlikely]] {
+                return result;
+            }
+
+            if (auto result = deserialize_field(
+                    archive, item, tag_number(tag), tag_type(tag));
+                failure(result)) [[unlikely]] {
+                return result;
+            }
+        }
+
+        return {};
+    }
+
+    template <typename Type, std::size_t FieldNumber = 1>
+    constexpr static auto ZPP_BITS_INLINE deserialize_field(
+        auto & archive, Type && item, unsigned int field_number, wire_type field_type)
+    {
+        if constexpr (FieldNumber >
+                      number_of_members<std::remove_cvref_t<Type>>()) {
+            return errc{};
+        } else if (FieldNumber != field_number) {
+            return deserialize_field<Type, FieldNumber + 1>(
+                archive, item, field_number, field_type);
+        } else {
+            return visit_members(
+                item,
+                [&](auto &&... items) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                    std::tuple<decltype(items) &...> refs = {items...};
+                    auto & item = std::get<FieldNumber - 1>(refs);
+                    using type = std::remove_reference_t<decltype(item)>;
+
+                    if constexpr (std::is_enum_v<type>) {
+                        varint<type> value;
+                        if (auto result = archive(value); failure(result))
+                            [[unlikely]] {
+                            return result;
+                        }
+                        item = value;
+                        return errc{};
+                    } else if constexpr (!concepts::container<type>) {
+                        return archive(item);
+                    } else {
+                        using orig_value_type = typename type::value_type;
+                        using value_type = std::conditional_t<
+                            std::is_enum_v<orig_value_type> &&
+                                !std::same_as<orig_value_type, std::byte>,
+                            varint<orig_value_type>,
+                            orig_value_type>;
+
+                        if constexpr (std::is_fundamental_v<value_type> ||
+                                      std::same_as<std::byte,
+                                                   value_type> ||
+                                      concepts::varint<value_type>) {
+                            auto fetch =
+                                [&]() ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                                    value_type value;
+                                    if (auto result = archive(value);
+                                        failure(result)) [[unlikely]] {
+                                        return result;
+                                    }
+
+                                    if constexpr (requires {
+                                                      item.push_back(
+                                                          orig_value_type(
+                                                              value));
+                                                  }) {
+                                        item.push_back(
+                                            orig_value_type(value));
+                                    } else {
+                                        item.insert(
+                                            orig_value_type(value));
+                                    }
+
+                                    return errc{};
+                                };
+                            if (field_type !=
+                                wire_type::length_delimited) {
+                                return fetch();
+                            }
+                            vsize_t length;
+                            if (auto result = archive(length);
+                                failure(result)) [[unlikely]] {
+                                return result;
+                            }
+
+                            if constexpr (requires { item.resize(1); } &&
+                                          (std::is_fundamental_v<
+                                               value_type> ||
+                                           std::same_as<value_type,
+                                                        std::byte>)) {
+                                item.resize(length / sizeof(value_type));
+                                return archive(unsized(item));
+                            }
+
+                            if constexpr (requires { item.reserve(1); }) {
+                                item.reserve(length);
+                            }
+
+                            auto end_position =
+                                length + archive.position();
+                            while (archive.position() < end_position) {
+                                if (auto result = fetch(); failure(result))
+                                    [[unlikely]] {
+                                    return result;
+                                }
+                            }
+
+                            return errc{};
+                        } else {
+                            std::aligned_storage_t<sizeof(value_type),
+                                                   alignof(value_type)>
+                                storage;
+
+                            constexpr auto destructor =
+                                [](auto pointer) constexpr
+                            {
+                                access::destruct(*pointer);
+                            };
+
+                            std::unique_ptr<value_type,
+                                            decltype(destructor)>
+                                object(access::placement_new<value_type>(
+                                    std::addressof(storage)));
+                            if (auto result = archive(*object);
+                                failure(result)) [[unlikely]] {
+                                return result;
+                            }
+
+                            if constexpr (requires {
+                                              item.push_back(
+                                                  std::move(*object));
+                                          }) {
+                                item.push_back(std::move(*object));
+                            } else {
+                                item.insert(std::move(*object));
+                            }
+
+                            return errc{};
+                        }
+                    }
+                });
+        }
+    }
+};
 
 namespace numbers
 {
