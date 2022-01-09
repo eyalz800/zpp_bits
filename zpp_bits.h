@@ -1552,9 +1552,9 @@ protected:
             m_position += sizeof(item);
             return {};
         } else if constexpr (requires {
-                                 typename std::enable_if_t<std::same_as<
+                                 requires std::same_as<
                                      bytes<typename type::value_type>,
-                                     type>>;
+                                     type>;
                              }) {
             static_assert(
                 !endian_aware ||
@@ -2026,9 +2026,9 @@ private:
             m_position += sizeof(item);
             return {};
         } else if constexpr (requires {
-                                 typename std::enable_if_t<std::same_as<
+                                 std::same_as<
                                      bytes<typename type::value_type>,
-                                     type>>;
+                                     type>;
                              }) {
             static_assert(
                 !endian_aware ||
