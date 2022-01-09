@@ -1274,7 +1274,7 @@ constexpr auto ZPP_BITS_INLINE varint_size(auto value)
 }
 
 template <typename Archive, typename Type, varint_encoding Encoding>
-constexpr auto serialize(
+constexpr auto ZPP_BITS_INLINE serialize(
     Archive & archive,
     varint<Type, Encoding> self) requires(Archive::kind() == kind::out)
 {
@@ -1312,7 +1312,7 @@ constexpr auto serialize(
 }
 
 template <typename Archive, typename Type, varint_encoding Encoding>
-constexpr auto serialize(
+constexpr auto ZPP_BITS_INLINE serialize(
     Archive & archive,
     varint<Type, Encoding> & self) requires(Archive::kind() == kind::in)
 {
