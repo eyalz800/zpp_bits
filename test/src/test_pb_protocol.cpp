@@ -219,4 +219,53 @@ TEST(test_pb_protocol, test_monster_unsized)
     EXPECT_EQ(m, m2);
 }
 
+struct person
+{
+    std::string name; // = 1
+    zpp::bits::vint32_t id; // = 2
+    std::string email; // = 3
+
+    enum phone_type
+    {
+        mobile = 0,
+        home = 1,
+        work = 2,
+    };
+
+    struct phone_number
+    {
+        std::string number; // = 1
+        phone_type type; // = 2
+    };
+
+    std::vector<phone_number> phones; // = 4
+};
+
+struct address_book
+{
+    std::vector<person> people; // = 1
+};
+
+auto serialize(const person &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+auto serialize(const person::phone_number &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+auto serialize(const address_book &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+
+TEST(test_pb_protocol, person)
+{
+    constexpr auto data =
+        "\n\x08John Doe\x10\xd2\t\x1a\x10jdoe@example.com\"\x0c\n\x08"
+        "555-4321\x10\x01"_b;
+    static_assert(data.size() == 45);
+
+    person p;
+    zpp::bits::in{data, zpp::bits::no_size{}}(p).or_throw();
+
+    EXPECT_EQ(p.name, "John Doe");
+    EXPECT_EQ(p.id, 1234);
+    EXPECT_EQ(p.email, "jdoe@example.com");
+    ASSERT_EQ(p.phones.size(), 1u);
+    EXPECT_EQ(p.phones[0].number, "555-4321");
+    EXPECT_EQ(p.phones[0].type, person::home);
+}
+
 } // namespace test_pb_protocol

@@ -1113,6 +1113,123 @@ Any value that is not set in a message leaves the target data member intact, whi
 to implement defaults for data members by using non-static data member initializer or to initialize
 the data member before deserializing the message.
 
+Lets take a full `.proto` file and translate it:
+```proto
+syntax = "proto3";
+
+package tutorial;
+
+message person {
+  string name = 1;
+  int32 id = 2;
+  string email = 3;
+
+  enum phone_type {
+    mobile = 0;
+    home = 1;
+    work = 2;
+  }
+
+  message phone_number {
+    string number = 1;
+    phone_type type = 2;
+  }
+
+  repeated phone_number phones = 4;
+}
+
+message address_book {
+  repeated person people = 1;
+}
+```
+
+The translated file:
+```cpp
+struct person
+{
+    std::string name; // = 1
+    zpp::bits::vint32_t id; // = 2
+    std::string email; // = 3
+
+    enum phone_type
+    {
+        mobile = 0,
+        home = 1,
+        work = 2,
+    };
+
+    struct phone_number
+    {
+        std::string number; // = 1
+        phone_type type; // = 2
+    };
+
+    std::vector<phone_number> phones; // = 4
+};
+
+struct address_book
+{
+    std::vector<person> people; // = 1
+};
+
+auto serialize(const person &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+auto serialize(const person::phone_number &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+auto serialize(const address_book &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+```
+
+Derserializing a message that was originally serialized with python:
+```python
+import addressbook_pb2
+person = addressbook_pb2.person()
+person.id = 1234
+person.name = "John Doe"
+person.email = "jdoe@example.com"
+phone = person.phones.add()
+phone.number = "555-4321"
+phone.type = addressbook_pb2.person.home
+```
+
+The output we get for `person` is:
+```python
+name: "John Doe"
+id: 1234
+email: "jdoe@example.com"
+phones {
+  number: "555-4321"
+  type: home
+}
+```
+
+Lets serialize it:
+```python
+person.SerializeToString()
+```
+
+The result is:
+```python
+b'\n\x08John Doe\x10\xd2\t\x1a\x10jdoe@example.com"\x0c\n\x08555-4321\x10\x01'
+```
+
+Back to C++:
+```cpp
+using namespace zpp::bits::literals;
+
+constexpr auto data =
+    "\n\x08John Doe\x10\xd2\t\x1a\x10jdoe@example.com\"\x0c\n\x08"
+    "555-4321\x10\x01"_b;
+static_assert(data.size() == 45);
+
+person p;
+zpp::bits::in{data, zpp::bits::no_size{}}(p).or_throw();
+
+// p.name == "John Doe"
+// p.id == 1234
+// p.email == "jdoe@example.com"
+// p.phones.size() == 1
+// p.phones[0].number == "555-4321"
+// p.phones[0].type == person::home
+```
+
 Benchmark
 ---------
 ### [fraillt/cpp_serializers_benchmark](https://github.com/fraillt/cpp_serializers_benchmark/tree/a4c0ebfb083c3b07ad16adc4301c9d7a7951f46e)
