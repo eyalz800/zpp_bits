@@ -39,9 +39,9 @@ static_assert(zpp::bits::from_bytes<"0a03089601"_decode_hex,
 
 struct nested_reserved_example
 {
-    [[no_unique_address]] zpp::bits::pb::reserved _1{}; // field number == 1
-    [[no_unique_address]] zpp::bits::pb::reserved _2{}; // field number == 2
-    example nested{};                                   // field number == 3
+    [[no_unique_address]] zpp::bits::pb_reserved _1{}; // field number == 1
+    [[no_unique_address]] zpp::bits::pb_reserved _2{}; // field number == 2
+    example nested{};                                  // field number == 3
 };
 
 auto serialize(const nested_reserved_example &)
@@ -56,6 +56,25 @@ static_assert(
 static_assert(
     zpp::bits::from_bytes<"1a03089601"_decode_hex,
                           zpp::bits::unsized_t<nested_reserved_example>>()
+        .nested.i == 150);
+
+struct nested_explicit_id_example
+{
+    example nested{};  // field number == 3
+
+    using serialize =
+        zpp::bits::protocol<zpp::bits::pb{zpp::bits::pb_map<1, 3>{}}>;
+};
+
+static_assert(sizeof(nested_explicit_id_example) == sizeof(example));
+
+static_assert(
+    zpp::bits::to_bytes<zpp::bits::unsized_t<nested_explicit_id_example>{
+        {.nested = example{150}}}>() == "1a03089601"_decode_hex);
+
+static_assert(
+    zpp::bits::from_bytes<"1a03089601"_decode_hex,
+                          zpp::bits::unsized_t<nested_explicit_id_example>>()
         .nested.i == 150);
 
 struct repeated_integers

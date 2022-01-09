@@ -1057,9 +1057,23 @@ To reserve fields:
 ```cpp
 struct example
 {
-    [[no_unique_address]] zpp::bits::pb::reserved _1; // field number 1 is reserved.
+    [[no_unique_address]] zpp::bits::pb_reserved _1; // field number 1 is reserved.
     zpp::bits::vint32_t i; // field number == 2
     zpp::bits::vsint32_t j; // field number == 3
+};
+```
+
+To explicitly map members to another field number:
+```cpp
+struct example
+{
+    zpp::bits::vint32_t i; // field number == 20
+    zpp::bits::vsint32_t j; // field number == 30
+
+    using serialize = zpp::bits::protocol<
+        zpp::bits::pb{
+            zpp::bits::pb_map<1, 20>{},
+            zpp::bits::pb_map<2, 30>{}}>;
 };
 ```
 
