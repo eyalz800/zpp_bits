@@ -3732,7 +3732,7 @@ struct pb
     constexpr static auto tag_type()
     {
         using type = std::remove_cvref_t<Type>;
-        if constexpr (concepts::varint<type> || std::same_as<Type, bool>) {
+        if constexpr (concepts::varint<type> || std::same_as<type, bool>) {
             return wire_type::varint;
         } else if constexpr (std::is_integral_v<type> ||
                              std::is_floating_point_v<type>) {
