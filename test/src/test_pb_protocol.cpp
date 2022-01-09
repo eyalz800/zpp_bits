@@ -266,6 +266,11 @@ TEST(test_pb_protocol, person)
     ASSERT_EQ(p.phones.size(), 1u);
     EXPECT_EQ(p.phones[0].number, "555-4321");
     EXPECT_EQ(p.phones[0].type, person::home);
+
+    std::array<std::byte, data.size()> new_data;
+    zpp::bits::out{new_data, zpp::bits::no_size{}}(p).or_throw();
+
+    EXPECT_EQ(data, new_data);
 }
 
 } // namespace test_pb_protocol
