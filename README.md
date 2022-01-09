@@ -32,7 +32,7 @@ Contents
 * [Reflection](#pointers-as-optionals)
 * [Additional Archive Controls](#additional-archive-controls)
 * [Variable Length Integers](#variable-length-integers)
-* [Protobuf (Experimental)](#protobuf-experimental)
+* [Protobuf (Experimental)](#protobuf)
 * [Benchmark](#benchmark)
 
 Motivation
@@ -1010,14 +1010,14 @@ zpp::bits::in in(data, zpp::bits::size_varint{}); // Uses varint to encode size.
 zpp::bits::out out(data, zpp::bits::size_varint{}); // Uses varint to encode size.
 ```
 
-Protobuf (Experimental)
------------------------
+Protobuf
+--------
 The serialization format of this library is not based on any known or accepted format.
 Naturally, other languages do not support this format, which makes it near impossible to use
 the library for cross programming language communication.
 
-For this reason the library provides
-support for **protobuf** which is available almost everywhere.
+For this reason the library provides **experimental support**
+support for protobuf, which is available almost everywhere.
 
 Please note that protobuf support is highly experimental and may not include
 all of the features, and it is generally slower (around 2-5 times slower) than the stock
