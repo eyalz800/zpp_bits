@@ -17,7 +17,9 @@
 #define ZPP_BITS_INLINE __forceinline
 #define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
 #endif
-#endif
+#else // ZPP_BITS_INLINE
+#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
+#endif // ZPP_BITS_INLINE
 
 #include <algorithm>
 #include <array>
