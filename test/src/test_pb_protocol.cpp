@@ -136,6 +136,7 @@ struct monster {
     std::vector<weapon> weapons;
     weapon equipped;
     std::vector<vec3> path;
+    bool boss;
 
     bool operator==(const monster &) const = default;
 };
@@ -159,7 +160,8 @@ TEST(test_pb_protocol, test_monster)
                          monster::weapon{.name = "none", .damage = 15},
                      },
                  .path = {monster::vec3{2.0, 3.0, 4.0},
-                          monster::vec3{5.0, 6.0, 7.0}}};
+                          monster::vec3{5.0, 6.0, 7.0}},
+                 .boss = true};
     out(m).or_throw();
 
     monster m2;
@@ -174,6 +176,7 @@ TEST(test_pb_protocol, test_monster)
     EXPECT_EQ(m.weapons, m2.weapons);
     EXPECT_EQ(m.equipped, m2.equipped);
     EXPECT_EQ(m.path, m2.path);
+    EXPECT_EQ(m.boss, m2.boss);
     EXPECT_EQ(m, m2);
 }
 
@@ -196,7 +199,8 @@ TEST(test_pb_protocol, test_monster_unsized)
                          monster::weapon{.name = "none", .damage = 15},
                      },
                  .path = {monster::vec3{2.0, 3.0, 4.0},
-                          monster::vec3{5.0, 6.0, 7.0}}};
+                          monster::vec3{5.0, 6.0, 7.0}},
+                 .boss = true};
     out(m).or_throw();
 
     monster m2;
@@ -211,6 +215,7 @@ TEST(test_pb_protocol, test_monster_unsized)
     EXPECT_EQ(m.weapons, m2.weapons);
     EXPECT_EQ(m.equipped, m2.equipped);
     EXPECT_EQ(m.path, m2.path);
+    EXPECT_EQ(m.boss, m2.boss);
     EXPECT_EQ(m, m2);
 }
 
