@@ -4009,7 +4009,7 @@ struct pb
                                     return errc{};
                                 };
                             if (field_type !=
-                                wire_type::length_delimited) {
+                                wire_type::length_delimited) [[unlikely]] {
                                 return fetch();
                             }
                             vsize_t length;
@@ -4025,22 +4025,22 @@ struct pb
                                                         std::byte>)) {
                                 item.resize(length / sizeof(value_type));
                                 return archive(unsized(item));
-                            }
-
-                            if constexpr (requires { item.reserve(1); }) {
-                                item.reserve(length);
-                            }
-
-                            auto end_position =
-                                length + archive.position();
-                            while (archive.position() < end_position) {
-                                if (auto result = fetch(); failure(result))
-                                    [[unlikely]] {
-                                    return result;
+                            } else {
+                                if constexpr (requires { item.reserve(1); }) {
+                                    item.reserve(length);
                                 }
-                            }
 
-                            return errc{};
+                                auto end_position =
+                                    length + archive.position();
+                                while (archive.position() < end_position) {
+                                    if (auto result = fetch(); failure(result))
+                                        [[unlikely]] {
+                                        return result;
+                                    }
+                                }
+
+                                return errc{};
+                            }
                         } else {
                             std::aligned_storage_t<sizeof(value_type),
                                                    alignof(value_type)>
