@@ -901,7 +901,7 @@ recommended to use the specifically made `zpp::bits::optional_ptr<T>` which
 optimizes out the boolean that the optional object usually keeps, and uses null pointer
 as an invalid state.
 
-Serializing a null pointer value in thata case will serialize a zero byte, while
+Serializing a null pointer value in that case will serialize a zero byte, while
 non-null values serialize as a single one byte followed by the bytes of the object.
 (i.e, serialization is identical to `std::optional<T>`).
 
@@ -1014,9 +1014,12 @@ Protobuf (Experimental)
 -----------------------
 The serialization format of this library is not based on any known or accepted format.
 Naturally, other languages do not support this format, which makes it near impossible to use
-the library for cross programming language communication. For this reason the library provides
-support for **protobuf** which is commonly used for binary serialization and cross language
-communication. Please note that protobuf support is highly experimental and may not include
+the library for cross programming language communication.
+
+For this reason the library provides
+support for **protobuf** which is available almost everywhere.
+
+Please note that protobuf support is highly experimental and may not include
 all of the features, and it is generally slower (around 2-5 times slower) than the stock
 format which aims to be zero overhead.
 
@@ -1105,7 +1108,7 @@ struct repeating
 };
 ```
 
-Currently all missing fields are dropped and not concatenated to the message, for efficiency.
+Currently all of the fields are optional, which is a good practice, missing fields are dropped and not concatenated to the message, for efficiency.
 Any value that is not set in a message leaves the target data member intact, which allows
 to implement defaults for data members by using non-static data member initializer or to initialize
 the data member before deserializing the message.
