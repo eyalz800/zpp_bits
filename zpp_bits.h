@@ -3830,12 +3830,12 @@ struct pb
                 constexpr auto tag =
                     make_tag(wire_type::length_delimited, FirstIndex + 1);
 
-                auto size = std::accumulate(std::begin(first_item),
-                                            std::end(first_item),
-                                            [](auto left, auto right) {
-                                                return varint_size(left) +
-                                                       varint_size(right);
-                                            });
+                auto size = std::reduce(std::begin(first_item),
+                                        std::end(first_item),
+                                        [](auto left, auto right) {
+                                            return varint_size(left) +
+                                                   varint_size(right);
+                                        });
                 if (auto result =
                         archive(tag,
                                 varint{size},
@@ -3851,7 +3851,7 @@ struct pb
                     make_tag(wire_type::length_delimited, FirstIndex + 1);
 
                 using type = typename type::value_type;
-                auto size = std::accumulate(
+                auto size = std::reduce(
                     std::begin(first_item),
                     std::end(first_item),
                     [](auto left, auto right) {
