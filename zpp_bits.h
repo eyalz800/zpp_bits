@@ -4170,8 +4170,11 @@ struct pb
         static_assert(check_type<type>());
 
         using archive_type = typename std::remove_cvref_t<decltype(archive)>;
-        if constexpr (!concepts::varint<typename archive_type::default_size_type>) {
-            out out{archive.data(), size_varint{}};
+        if constexpr (!concepts::varint<
+                          typename archive_type::default_size_type> ||
+                      ((std::endian::little != std::endian::native) &&
+                       !archive_type::endian_aware)) {
+            out out{archive.data(), size_varint{}, endian::little{}};
             out.position() = archive.position();
             auto result = visit_members(
                 item,
@@ -4329,7 +4332,8 @@ struct pb
     {
         auto data = archive.remaining_data();
         in in{std::span{data.data(), std::min(size, data.size())},
-              size_varint{}};
+              size_varint{},
+              endian::little{}};
         auto result = serialize_fields(in, item);
         archive.position() += in.position();
         return result;
