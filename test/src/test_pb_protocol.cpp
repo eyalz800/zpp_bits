@@ -367,4 +367,45 @@ TEST(test_pb_protocol, person_explicit)
     EXPECT_EQ(data, new_data);
 }
 
+struct person_map
+{
+    std::string name; // = 1
+    zpp::bits::vint32_t id; // = 2
+    std::string email; // = 3
+
+    enum phone_type
+    {
+        mobile = 0,
+        home = 1,
+        work = 2,
+    };
+
+    std::map<std::string, phone_type> phones; // = 4
+};
+
+auto serialize(const person_map &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+
+TEST(test_pb_protocol, person_map)
+{
+    constexpr auto data =
+        "\n\x08John Doe\x10\xd2\t\x1a\x10jdoe@example.com\"\x0c\n\x08"
+        "555-4321\x10\x01"_b;
+    static_assert(data.size() == 45);
+
+    person_map p;
+    zpp::bits::in{data, zpp::bits::no_size{}}(p).or_throw();
+
+    EXPECT_EQ(p.name, "John Doe");
+    EXPECT_EQ(p.id, 1234);
+    EXPECT_EQ(p.email, "jdoe@example.com");
+    ASSERT_EQ(p.phones.size(), 1u);
+    ASSERT_TRUE(p.phones.contains("555-4321"));
+    EXPECT_EQ(p.phones["555-4321"], person_map::home);
+
+    std::array<std::byte, data.size()> new_data;
+    zpp::bits::out{new_data, zpp::bits::no_size{}}(p).or_throw();
+
+    EXPECT_EQ(data, new_data);
+}
+
 } // namespace test_pb_protocol
