@@ -1241,20 +1241,16 @@ struct sized_item : public Type
     {
     }
 
-    constexpr auto ZPP_BITS_INLINE
-    friend serialize(auto & archive, const sized_item<Type, SizeType> & self) requires(
-        std::remove_cvref_t<decltype(archive)>::kind() == kind::out)
+    constexpr static auto ZPP_BITS_INLINE serialize(auto & archive,
+                                                    auto & self)
     {
-        return archive.template serialize_one<SizeType>(
-            static_cast<const Type &>(self));
-    }
-
-    constexpr auto ZPP_BITS_INLINE
-    friend serialize(auto & archive, sized_item<Type, SizeType> & self) requires(
-        std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
-    {
-        return archive.template serialize_one<SizeType>(
-            static_cast<Type &>(self));
+        if constexpr (std::remove_cvref_t<decltype(archive)>::kind() == kind::out) {
+            return archive.template serialize_one<SizeType>(
+                static_cast<const Type &>(self));
+        } else {
+            return archive.template serialize_one<SizeType>(
+                static_cast<Type &>(self));
+        }
     }
 };
 
