@@ -358,8 +358,8 @@ TEST(test_pb_protocol, person_explicit)
     p1.name = p.name;
     p1.id = p.id;
     p1.email = p.email;
-    p1.phones.push_back({pb_value(p.phones[0].number),
-                           person::phone_type(pb_value(p.phones[0].type))});
+    p1.phones.push_back({p.phones[0].number,
+                         person::phone_type(pb_value(p.phones[0].type))});
 
     std::array<std::byte, data.size()> new_data;
     zpp::bits::out{new_data, zpp::bits::no_size{}}(p1).or_throw();
