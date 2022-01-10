@@ -1073,8 +1073,8 @@ struct example
     using serialize = zpp::bits::protocol<zpp::bits::pb{}>;
 };
 ```
-Accessing the value behind the field is usually implicit however if explicitly needed
-use `pb_value(<variable>)` to get the value.
+Accessing the value behind the field is often transparent however if explicitly needed
+use `pb_value(<variable>)` to get or assign to the value.
 
 To map members to another field number:
 ```cpp
