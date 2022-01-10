@@ -4334,14 +4334,13 @@ struct pb
         in in{std::span{data.data(), std::min(size, data.size())},
               size_varint{},
               endian::little{}};
-        auto result = serialize_fields(in, item);
+        auto result = deserialize_fields(in, item);
         archive.position() += in.position();
         return result;
     }
 
     constexpr static errc ZPP_BITS_INLINE
-    serialize_fields(auto & archive, auto & item) requires(
-        std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
+    deserialize_fields(auto & archive, auto & item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
         static_assert(check_type<type>());
