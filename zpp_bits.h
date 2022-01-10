@@ -661,13 +661,23 @@ concept owning_pointer = !optional<Type> &&
     traits::is_shared_ptr<std::remove_cvref_t<Type>>::value);
 
 template <typename Type>
+concept bitset =
+    !has_serialize<Type> && requires(std::remove_cvref_t<Type> bitset)
+{
+    bitset.flip();
+    bitset.set();
+    bitset.test(0);
+    bitset.to_ullong();
+};
+
+template <typename Type>
 concept by_protocol = access::has_protocol<Type>() &&
     !has_explicit_serialize<Type>;
 
 template <typename Type>
 concept unspecialized =
     !container<Type> && !owning_pointer<Type> && !tuple<Type> &&
-    !variant<Type> && !optional<Type> &&
+    !variant<Type> && !optional<Type> && !bitset<Type> &&
     !std::is_array_v<std::remove_cvref_t<Type>> && !by_protocol<Type>;
 
 template <typename Type>
@@ -1800,6 +1810,32 @@ protected:
         return serialize_one(*pointer);
     }
 
+    constexpr errc ZPP_BITS_INLINE
+    serialize_one(concepts::bitset auto && bitset)
+    {
+        constexpr auto size = std::remove_cvref_t<decltype(bitset)>{}.size();
+        constexpr auto size_in_bytes = (size + (CHAR_BIT - 1)) / CHAR_BIT;
+
+        if constexpr (resizable) {
+            enlarge_for(size_in_bytes);
+        } else {
+            if (size_in_bytes > m_data.size() - m_position)
+                [[unlikely]] {
+                return std::errc::value_too_large;
+            }
+        }
+
+        auto data = m_data.data() + m_position;
+        for (std::size_t i = 0; i < size; ++i) {
+            auto & value = data[i / CHAR_BIT];
+            value = byte_type(static_cast<unsigned char>(value) |
+                              (bitset[i] << (i & 0x7)));
+        }
+
+        m_position += size_in_bytes;
+        return {};
+    }
+
     template <typename SizeType = default_size_type>
     constexpr errc ZPP_BITS_INLINE serialize_one(concepts::by_protocol auto && item)
     {
@@ -1839,7 +1875,8 @@ protected:
                         enlarge_for(move_ahead_count);
                     } else {
                         if (move_ahead_count >
-                            m_data.size() - current_position) {
+                            m_data.size() - current_position)
+                            [[unlikely]] {
                             return std::errc::value_too_large;
                         }
                     }
@@ -2508,6 +2545,28 @@ private:
         }
 
         pointer.reset(loaded.release());
+        return {};
+    }
+
+    constexpr errc ZPP_BITS_INLINE
+    serialize_one(concepts::bitset auto && bitset)
+    {
+        constexpr auto size = std::remove_cvref_t<decltype(bitset)>{}.size();
+        constexpr auto size_in_bytes = (size + (CHAR_BIT - 1)) / CHAR_BIT;
+
+        if (size_in_bytes > m_data.size() - m_position)
+            [[unlikely]] {
+            return std::errc::value_too_large;
+        }
+
+        auto data = m_data.data() + m_position;
+        for (std::size_t i = 0; i < size; ++i) {
+            bitset[i] = (static_cast<unsigned char>(data[i / CHAR_BIT]) >>
+                         (i & 0x7)) &
+                        0x1;
+        }
+
+        m_position += size_in_bytes;
         return {};
     }
 
