@@ -60,10 +60,10 @@ static_assert(
 
 struct nested_explicit_id_example
 {
-    example nested{};  // field number == 3
+    zpp::bits::pb_field<example, 3> nested{};  // field number == 3
 
     using serialize =
-        zpp::bits::protocol<zpp::bits::pb{zpp::bits::pb_map<1, 3>{}}>;
+        zpp::bits::protocol<zpp::bits::pb{}>;
 };
 
 static_assert(sizeof(nested_explicit_id_example) == sizeof(example));
@@ -75,6 +75,25 @@ static_assert(
 static_assert(
     zpp::bits::from_bytes<"1a03089601"_decode_hex,
                           zpp::bits::unsized_t<nested_explicit_id_example>>()
+        .nested.i == 150);
+
+struct nested_map_id_example
+{
+    example nested{};  // field number == 3
+
+    using serialize =
+        zpp::bits::protocol<zpp::bits::pb{zpp::bits::pb_map<1, 3>{}}>;
+};
+
+static_assert(sizeof(nested_map_id_example) == sizeof(example));
+
+static_assert(
+    zpp::bits::to_bytes<zpp::bits::unsized_t<nested_map_id_example>{
+        {.nested = example{150}}}>() == "1a03089601"_decode_hex);
+
+static_assert(
+    zpp::bits::from_bytes<"1a03089601"_decode_hex,
+                          zpp::bits::unsized_t<nested_map_id_example>>()
         .nested.i == 150);
 
 struct repeated_integers
@@ -288,6 +307,62 @@ TEST(test_pb_protocol, person)
 
     std::array<std::byte, data.size()> new_data;
     zpp::bits::out{new_data, zpp::bits::no_size{}}(p).or_throw();
+
+    EXPECT_EQ(data, new_data);
+}
+
+struct person_explicit
+{
+    zpp::bits::pb_field<std::string, 10> extra;
+    zpp::bits::pb_field<std::string, 1> name;
+    zpp::bits::pb_field<zpp::bits::vint32_t, 2> id;
+    zpp::bits::pb_field<std::string, 3> email;
+
+    enum phone_type
+    {
+        mobile = 0,
+        home = 1,
+        work = 2,
+    };
+
+    struct phone_number
+    {
+        zpp::bits::pb_field<std::string, 1> number;
+        zpp::bits::pb_field<phone_type, 2> type;
+    };
+
+    zpp::bits::pb_field<std::vector<phone_number>, 4> phones;
+};
+
+auto serialize(const person_explicit &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+auto serialize(const person_explicit::phone_number &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+
+TEST(test_pb_protocol, person_explicit)
+{
+    constexpr auto data =
+        "\n\x08John Doe\x10\xd2\t\x1a\x10jdoe@example.com\"\x0c\n\x08"
+        "555-4321\x10\x01"_b;
+    static_assert(data.size() == 45);
+
+    person_explicit p;
+    zpp::bits::in{data, zpp::bits::no_size{}}(p).or_throw();
+
+    EXPECT_EQ(p.name, "John Doe");
+    EXPECT_EQ(p.id, 1234);
+    EXPECT_EQ(p.email, "jdoe@example.com");
+    ASSERT_EQ(p.phones.size(), 1u);
+    EXPECT_EQ(p.phones[0].number, "555-4321");
+    EXPECT_EQ(p.phones[0].type, person_explicit::home);
+
+    person p1;
+    p1.name = p.name;
+    p1.id = p.id;
+    p1.email = p.email;
+    p1.phones.push_back({pb_value(p.phones[0].number),
+                           person::phone_type(pb_value(p.phones[0].type))});
+
+    std::array<std::byte, data.size()> new_data;
+    zpp::bits::out{new_data, zpp::bits::no_size{}}(p1).or_throw();
 
     EXPECT_EQ(data, new_data);
 }

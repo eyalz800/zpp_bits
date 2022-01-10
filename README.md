@@ -1063,7 +1063,20 @@ struct example
 };
 ```
 
-To explicitly map members to another field number:
+To explicitly specify for each member the field number:
+```cpp
+struct example
+{
+    zpp::bits::pb_field<zpp::bits::vint32_t, 20> i; // field number == 20
+    zpp::bits::pb_field<zpp::bits::vsint32_t, 30> j; // field number == 30
+
+    using serialize = zpp::bits::protocol<zpp::bits::pb{}>;
+};
+```
+Accessing the value behind the field is usually implicit however if explicitly needed
+use `pb_value(<variable>)` to get the value.
+
+To map members to another field number:
 ```cpp
 struct example
 {

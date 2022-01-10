@@ -671,8 +671,10 @@ concept bitset =
 };
 
 template <typename Type>
-concept by_protocol = access::has_protocol<Type>() &&
-    !has_explicit_serialize<Type>;
+concept has_protocol = access::has_protocol<Type>();
+
+template <typename Type>
+concept by_protocol = has_protocol<Type> && !has_explicit_serialize<Type>;
 
 template <typename Type>
 concept unspecialized =
@@ -1225,30 +1227,34 @@ serialize(Archive & archive,
 template <typename Type, typename SizeType>
 struct sized_item : public Type
 {
-    using base = Type;
-    using base::base;
+    using Type::Type;
+    using Type::operator=;
 
-    constexpr sized_item(base && other) noexcept(
-        std::is_nothrow_move_constructible_v<base>) :
-        base(std::move(other))
+    constexpr sized_item(Type && other) noexcept(
+        std::is_nothrow_move_constructible_v<Type>) :
+        Type(std::move(other))
     {
     }
 
-    constexpr sized_item(const base & other) :
-        base(other)
+    constexpr sized_item(const Type & other) :
+        Type(other)
     {
     }
 
-    constexpr static auto ZPP_BITS_INLINE serialize(auto & archive,
-                                                    auto & self)
+    constexpr auto ZPP_BITS_INLINE
+    friend serialize(auto & archive, const sized_item<Type, SizeType> & self) requires(
+        std::remove_cvref_t<decltype(archive)>::kind() == kind::out)
     {
-        if constexpr (std::remove_cvref_t<decltype(archive)>::kind() == kind::out) {
-            return archive.template serialize_one<SizeType>(
-                static_cast<const base &>(self));
-        } else {
-            return archive.template serialize_one<SizeType>(
-                static_cast<base &>(self));
-        }
+        return archive.template serialize_one<SizeType>(
+            static_cast<const Type &>(self));
+    }
+
+    constexpr auto ZPP_BITS_INLINE
+    friend serialize(auto & archive, sized_item<Type, SizeType> & self) requires(
+        std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
+    {
+        return archive.template serialize_one<SizeType>(
+            static_cast<Type &>(self));
     }
 };
 
@@ -1315,6 +1321,16 @@ struct varint
     }
 
     constexpr operator Type() const
+    {
+        return value;
+    }
+
+    constexpr decltype(auto) operator*() &
+    {
+        return (value);
+    }
+
+    constexpr auto operator*() const &
     {
         return value;
     }
@@ -2130,7 +2146,7 @@ private:
             m_position += sizeof(item);
             return {};
         } else if constexpr (requires {
-                                 std::same_as<
+                                 requires std::same_as<
                                      bytes<typename type::value_type>,
                                      type>;
                              }) {
@@ -3819,7 +3835,9 @@ struct rpc_checker
 template <typename... Bindings>
 using rpc = typename rpc_checker<Bindings...>::type;
 
-using pb_reserved = std::monostate;
+struct pb_reserved
+{
+};
 
 template <std::size_t From, std::size_t To>
 struct pb_map
@@ -3829,6 +3847,98 @@ struct pb_map
         return ((index + 1) == From) ? To : 0u;
     }
 };
+
+template <typename Type, auto FieldNumber>
+struct pb_field_fundamental
+{
+    using value_type = Type;
+    using pb_field_type = Type;
+
+    constexpr static auto pb_field_number = FieldNumber;
+
+    constexpr pb_field_fundamental() = default;
+
+    constexpr pb_field_fundamental(Type value) :
+        value(value)
+    {
+    }
+
+    constexpr operator Type &() &
+    {
+        return value;
+    }
+
+    constexpr operator Type() const
+    {
+        return value;
+    }
+
+    Type value{};
+};
+
+template <typename Type, auto FieldNumber>
+decltype(auto) pb_value(pb_field_fundamental<Type, FieldNumber> & pb)
+{
+    return static_cast<
+        typename pb_field_fundamental<Type, FieldNumber>::pb_field_type &>(
+        pb);
+}
+
+template <typename Type, auto FieldNumber>
+auto pb_value(const pb_field_fundamental<Type, FieldNumber> & pb)
+{
+    return static_cast<
+        typename pb_field_fundamental<Type, FieldNumber>::pb_field_type>(
+        pb);
+}
+
+template <typename Type, auto FieldNumber>
+struct pb_field_struct : Type
+{
+    using Type::Type;
+    using Type::operator=;
+    using pb_field_type = Type;
+
+    static constexpr auto pb_field_number = FieldNumber;
+
+    constexpr pb_field_struct(Type && other) noexcept(
+        std::is_nothrow_move_constructible_v<Type>) :
+        Type(std::move(other))
+    {
+    }
+
+    constexpr pb_field_struct(const Type & other)
+        : Type(other)
+    {
+    }
+};
+
+template <typename Type, auto FieldNumber>
+decltype(auto) pb_value(pb_field_struct<Type, FieldNumber> & pb)
+{
+    return static_cast<
+        typename pb_field_struct<Type, FieldNumber>::pb_field_type &>(pb);
+}
+
+template <typename Type, auto FieldNumber>
+decltype(auto) pb_value(const pb_field_struct<Type, FieldNumber> & pb)
+{
+    return static_cast<const typename pb_field_struct<Type, FieldNumber>::
+                           pb_field_type &>(pb);
+}
+
+template <typename Type, auto FieldNumber>
+decltype(auto) pb_value(pb_field_struct<Type, FieldNumber> && pb)
+{
+    return static_cast<
+        typename pb_field_struct<Type, FieldNumber>::pb_field_type &&>(pb);
+}
+
+template <typename Type, auto FieldNumber>
+using pb_field =
+    std::conditional_t<std::is_class_v<Type>,
+                       pb_field_struct<Type, FieldNumber>,
+                       pb_field_fundamental<Type, FieldNumber>>;
 
 template <typename... Options>
 struct pb
@@ -3861,31 +3971,81 @@ struct pb
     }
 
     template <std::size_t Index>
+    struct field_number_visitor
+    {
+        template <typename... Types>
+        constexpr auto operator()() const
+        {
+            if constexpr (requires {
+                              std::remove_cvref_t<decltype(std::get<Index>(
+                                  std::declval<std::tuple<Types...>>()))>::
+                                  pb_field_number;
+                          }) {
+                return std::integral_constant<
+                    unsigned int,
+                    std::remove_cvref_t<decltype(std::get<Index>(
+                        std::declval<std::tuple<Types...>>()))>::
+                        pb_field_number>();
+            } else {
+                return std::integral_constant<unsigned int, 0>{};
+            }
+        }
+    };
+
+    template <typename Type, std::size_t Index>
+    constexpr static auto field_number_from_struct()
+    {
+        constexpr auto explicit_field_number =
+            visit_members_types<Type>(field_number_visitor<Index>{})();
+        if constexpr (explicit_field_number > 0) {
+            return explicit_field_number;
+        } else {
+            static_assert(
+                (0 + ... + std::size_t(has_mapped_field<Index>(Options{}))) <=
+                1);
+
+            constexpr auto mapped_field =
+                (0 + ... + get_mapped_field<Index>(Options{}));
+            if constexpr (mapped_field != 0) {
+                return mapped_field;
+            } else {
+                return Index + 1;
+            }
+        }
+    }
+
+    template <typename Type, std::size_t Index>
     constexpr static auto field_number()
     {
-        static_assert(
-            (0 + ... + std::size_t(has_mapped_field<Index>(Options{}))) <=
-            1);
-
-        constexpr auto mapped_field =
-            (0 + ... + get_mapped_field<Index>(Options{}));
-        if constexpr (mapped_field != 0) {
-            return mapped_field;
+        if constexpr (requires { requires(Type::pb_field_number > 0); }) {
+            return Type::pb_field_number;
         } else {
-            return Index + 1;
+            static_assert(
+                (0 + ... + std::size_t(has_mapped_field<Index>(Options{}))) <=
+                1);
+
+            constexpr auto mapped_field =
+                (0 + ... + get_mapped_field<Index>(Options{}));
+            if constexpr (mapped_field != 0) {
+                return mapped_field;
+            } else {
+                return Index + 1;
+            }
         }
     }
 
     template <typename Type, std::size_t... Indices>
     constexpr static auto unique_field_numbers(std::index_sequence<Indices...>)
     {
-        return traits::unique(std::size_t{field_number<Indices>()}...);
+        return traits::unique(
+            std::size_t{field_number_from_struct<Type, Indices>()}...);
     }
 
     template <typename Type>
     constexpr static auto unique_field_numbers()
     {
-        constexpr auto members = number_of_members<std::remove_cvref_t<Type>>();
+        constexpr auto members =
+            number_of_members<std::remove_cvref_t<Type>>();
         if constexpr (members >= 0) {
             return unique_field_numbers<std::remove_cvref_t<Type>>(
                 std::make_index_sequence<members>());
@@ -3895,11 +4055,26 @@ struct pb
     }
 
     template <typename Type>
+    constexpr static auto is_pb_field()
+    {
+        using type = std::remove_cvref_t<Type>;
+        return requires
+        {
+            requires std::same_as<type,
+                                  pb_field<typename type::pb_field_type,
+                                           type::pb_field_number>>;
+        };
+    }
+
+    template <typename Type>
     constexpr static auto check_type()
     {
         using type = std::remove_cvref_t<Type>;
-        if constexpr (!std::is_class_v<type> || concepts::varint<type> ||
-                      concepts::empty<type>) {
+        if constexpr (is_pb_field<type>()) {
+            return check_type<typename type::pb_field_type>();
+        } else if constexpr (!std::is_class_v<type> ||
+                             concepts::varint<type> ||
+                             concepts::empty<type>) {
             return true;
         } else if constexpr (concepts::container<type>) {
             static_assert(
@@ -3911,9 +4086,9 @@ struct pb
             return true;
         } else if constexpr (concepts::by_protocol<type>) {
             static_assert(
-                    std::same_as<simple,
-                    typename decltype(access::get_protocol<
-                        type>())::simple>);
+                std::same_as<simple,
+                             typename decltype(access::get_protocol<
+                                               type>())::simple>);
             static_assert(unique_field_numbers<type>());
             return true;
         } else {
@@ -3949,7 +4124,12 @@ struct pb
     constexpr static auto tag_type()
     {
         using type = std::remove_cvref_t<Type>;
-        if constexpr (concepts::varint<type> || std::same_as<type, bool>) {
+        if constexpr (is_pb_field<type>()) {
+            return tag_type<typename type::pb_field_type>();
+        } else if constexpr (concepts::varint<type> ||
+                      (std::is_enum_v<type> &&
+                       !std::same_as<type, std::byte>) ||
+                      std::same_as<type, bool>) {
             return wire_type::varint;
         } else if constexpr (std::is_integral_v<type> ||
                              std::is_floating_point_v<type>) {
@@ -3974,13 +4154,14 @@ struct pb
     template <typename Type, auto Index>
     constexpr static auto make_tag()
     {
-        return make_tag_explicit(tag_type<Type>(), field_number<Index>());
+        return make_tag_explicit(tag_type<Type>(),
+                                 field_number<Type, Index>());
     }
 
-    template <wire_type WireType, auto Index>
+    template <wire_type WireType, typename Type, auto Index>
     constexpr static auto make_tag()
     {
-        return make_tag_explicit(WireType, field_number<Index>());
+        return make_tag_explicit(WireType, field_number<Type, Index>());
     }
 
     constexpr auto ZPP_BITS_INLINE
@@ -4026,94 +4207,9 @@ struct pb
         auto &... items) requires(std::remove_cvref_t<decltype(archive)>::
                                       kind() == kind::out)
     {
-        using type = std::remove_cvref_t<decltype(first_item)>;
-
-        if constexpr (!concepts::empty<type>) {
-            if constexpr (std::is_enum_v<type> && !std::same_as<type, std::byte>) {
-                constexpr auto tag = make_tag<wire_type::varint, FirstIndex>();
-                if (auto result = archive(
-                        tag,
-                        varint{std::underlying_type_t<type>{first_item}});
-                    failure(result)) [[unlikely]] {
-                    return result;
-                }
-            } else if constexpr (!concepts::container<type>) {
-                constexpr auto tag = make_tag<type, FirstIndex>();
-                if (auto result = archive(tag, first_item); failure(result)) [[unlikely]] {
-                    return result;
-                }
-            } else if constexpr (requires {
-                                     requires std::is_fundamental_v<
-                                         typename type::value_type> ||
-                                         std::same_as<
-                                             typename type::value_type,
-                                             std::byte>;
-                                 }) {
-                constexpr auto tag =
-                    make_tag<wire_type::length_delimited, FirstIndex>();
-                if (auto result =
-                        archive(tag,
-                                varint{first_item.size() *
-                                       sizeof(typename type::value_type)},
-                                unsized(first_item));
-                    failure(result)) [[unlikely]] {
-                    return result;
-                }
-            } else if constexpr (requires {
-                                     requires concepts::varint<
-                                         typename type::value_type>;
-                                 }) {
-                constexpr auto tag =
-                    make_tag<wire_type::length_delimited, FirstIndex>();
-
-                std::size_t size = {};
-                for (auto & item : first_item) {
-                    size += varint_size<type::value_type::encoding>(
-                        item.value);
-                }
-                if (auto result =
-                        archive(tag,
-                                varint{size},
-                                unsized(first_item));
-                    failure(result)) [[unlikely]] {
-                    return result;
-                }
-            } else if constexpr (requires {
-                                     requires std::is_enum_v<
-                                         typename type::value_type>;
-                                 }) {
-                constexpr auto tag =
-                    make_tag<wire_type::length_delimited, FirstIndex>();
-
-                using type = typename type::value_type;
-                std::size_t size = {};
-                for (auto & item : first_item) {
-                    size +=
-                        varint_size(std::underlying_type_t<type>(item));
-                }
-                if (auto result =
-                        archive(tag,
-                                varint{size});
-                    failure(result)) [[unlikely]] {
-                    return result;
-                }
-                for (auto & item : first_item) {
-                    if (auto result = archive(
-                            varint{std::underlying_type_t<type>(item)});
-                        failure(result)) [[unlikely]] {
-                        return result;
-                    }
-                }
-            } else {
-                constexpr auto tag =
-                    make_tag<typename type::value_type, FirstIndex>();
-                for (auto & item : first_item) {
-                    if (auto result = archive(tag, item); failure(result))
-                        [[unlikely]] {
-                        return result;
-                    }
-                }
-            }
+        if (auto result = serialize_one<FirstIndex>(archive, first_item);
+            failure(result)) [[unlikely]] {
+            return result;
         }
 
         return serialize_many(
@@ -4125,6 +4221,105 @@ struct pb
         std::remove_cvref_t<decltype(archive)>::kind() == kind::out)
     {
         return {};
+    }
+
+    template <std::size_t Index, typename TagType = void>
+    constexpr static errc ZPP_BITS_INLINE
+    serialize_one(auto & archive, auto & item) requires(
+        std::remove_cvref_t<decltype(archive)>::kind() == kind::out)
+    {
+        using type = std::remove_cvref_t<decltype(item)>;
+        using tag_type = std::conditional_t<std::is_void_v<TagType>, type, TagType>;
+
+        if constexpr (concepts::empty<type>) {
+            return {};
+        } else if constexpr (is_pb_field<type>()) {
+            return serialize_one<Index, tag_type>(
+                archive,
+                static_cast<const typename type::pb_field_type &>(item));
+        } else if constexpr (std::is_enum_v<type> &&
+                             !std::same_as<type, std::byte>) {
+            constexpr auto tag = make_tag<tag_type, Index>();
+            if (auto result = archive(
+                    tag, varint{std::underlying_type_t<type>{item}});
+                failure(result)) [[unlikely]] {
+                return result;
+            }
+            return {};
+        } else if constexpr (!concepts::container<type>) {
+            constexpr auto tag = make_tag<tag_type, Index>();
+            if (auto result = archive(tag, item); failure(result))
+                [[unlikely]] {
+                return result;
+            }
+            return {};
+        } else if constexpr (requires {
+                                 requires std::is_fundamental_v<
+                                     typename type::value_type> ||
+                                     std::same_as<
+                                         typename type::value_type,
+                                         std::byte>;
+                             }) {
+            constexpr auto tag = make_tag<tag_type, Index>();
+            if (auto result =
+                    archive(tag,
+                            varint{item.size() *
+                                   sizeof(typename type::value_type)},
+                            unsized(item));
+                failure(result)) [[unlikely]] {
+                return result;
+            }
+            return {};
+        } else if constexpr (requires {
+                                 requires concepts::varint<
+                                     typename type::value_type>;
+                             }) {
+            constexpr auto tag = make_tag<tag_type, Index>();
+
+            std::size_t size = {};
+            for (auto & element : item) {
+                size +=
+                    varint_size<type::value_type::encoding>(element.value);
+            }
+            if (auto result = archive(tag, varint{size}, unsized(item));
+                failure(result)) [[unlikely]] {
+                return result;
+            }
+            return {};
+        } else if constexpr (requires {
+                                 requires std::is_enum_v<
+                                     typename type::value_type>;
+                             }) {
+            constexpr auto tag = make_tag<tag_type, Index>();
+
+            using type = typename type::value_type;
+            std::size_t size = {};
+            for (auto & element : item) {
+                size += varint_size(std::underlying_type_t<type>(element));
+            }
+            if (auto result = archive(tag, varint{size}); failure(result))
+                [[unlikely]] {
+                return result;
+            }
+            for (auto & element : item) {
+                if (auto result = archive(
+                        varint{std::underlying_type_t<type>(element)});
+                    failure(result)) [[unlikely]] {
+                    return result;
+                }
+            }
+            return {};
+        } else {
+            constexpr auto tag =
+                make_tag<typename type::value_type, Index>();
+            for (auto & element : item) {
+                if (auto result = archive(tag, element); failure(result))
+                    [[unlikely]] {
+                    return result;
+                }
+            }
+            return {};
+        }
     }
 
     constexpr errc ZPP_BITS_INLINE operator()(
@@ -4181,18 +4376,18 @@ struct pb
         return {};
     }
 
-    template <typename Type, std::size_t Index = 0>
+    template <std::size_t Index = 0>
     constexpr static auto ZPP_BITS_INLINE
     deserialize_field(auto & archive,
-                      Type && item,
+                      auto && item,
                       auto field_num,
                       wire_type field_type)
     {
-        if constexpr (Index >=
-                      number_of_members<std::remove_cvref_t<Type>>()) {
+        using type = std::remove_reference_t<decltype(item)>;
+        if constexpr (Index >= number_of_members<type>()) {
             return errc{};
-        } else if (field_number<Index>() != field_num) {
-            return deserialize_field<Type, Index + 1>(
+        } else if (field_number_from_struct<type, Index>() != field_num) {
+            return deserialize_field<Index + 1>(
                 archive, item, field_num, field_type);
         } else {
             return visit_members(
@@ -4203,116 +4398,119 @@ struct pb
                     using type = std::remove_reference_t<decltype(item)>;
                     static_assert(check_type<type>());
 
-                    if constexpr (std::is_enum_v<type>) {
-                        varint<type> value;
-                        if (auto result = archive(value); failure(result))
+                    return deserialize_field(archive, field_type, item);
+                });
+        }
+    }
+
+    constexpr static auto ZPP_BITS_INLINE deserialize_field(
+        auto & archive, wire_type field_type, auto & item)
+    {
+        using type = std::remove_reference_t<decltype(item)>;
+        static_assert(check_type<type>());
+
+        if constexpr (std::is_enum_v<type>) {
+            varint<type> value;
+            if (auto result = archive(value); failure(result))
+                [[unlikely]] {
+                return result;
+            }
+            item = value;
+            return errc{};
+        } else if constexpr (is_pb_field<type>()) {
+            return deserialize_field(
+                archive,
+                field_type,
+                static_cast<typename type::pb_field_type &>(item));
+        } else if constexpr (!concepts::container<type>) {
+            return archive(item);
+        } else {
+            using orig_value_type = typename type::value_type;
+            using value_type = std::conditional_t<
+                std::is_enum_v<orig_value_type> &&
+                    !std::same_as<orig_value_type, std::byte>,
+                varint<orig_value_type>,
+                orig_value_type>;
+
+            if constexpr (std::is_fundamental_v<value_type> ||
+                          std::same_as<std::byte, value_type> ||
+                          concepts::varint<value_type>) {
+                auto fetch = [&]() ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                    value_type value;
+                    if (auto result = archive(value); failure(result))
+                        [[unlikely]] {
+                        return result;
+                    }
+
+                    if constexpr (requires {
+                                      item.push_back(
+                                          orig_value_type(value));
+                                  }) {
+                        item.push_back(orig_value_type(value));
+                    } else {
+                        item.insert(orig_value_type(value));
+                    }
+
+                    return errc{};
+                };
+                if (field_type != wire_type::length_delimited)
+                    [[unlikely]] {
+                    return fetch();
+                }
+                vsize_t length;
+                if (auto result = archive(length); failure(result))
+                    [[unlikely]] {
+                    return result;
+                }
+
+                if constexpr (requires { item.resize(1); } &&
+                              (std::is_fundamental_v<value_type> ||
+                               std::same_as<value_type, std::byte>)) {
+                    item.resize(length / sizeof(value_type));
+                    return archive(unsized(item));
+                } else {
+                    if constexpr (requires { item.reserve(1); }) {
+                        item.reserve(length);
+                    }
+
+                    auto end_position = length + archive.position();
+                    while (archive.position() < end_position) {
+                        if (auto result = fetch(); failure(result))
                             [[unlikely]] {
                             return result;
                         }
-                        item = value;
-                        return errc{};
-                    } else if constexpr (!concepts::container<type>) {
-                        return archive(item);
-                    } else {
-                        using orig_value_type = typename type::value_type;
-                        using value_type = std::conditional_t<
-                            std::is_enum_v<orig_value_type> &&
-                                !std::same_as<orig_value_type, std::byte>,
-                            varint<orig_value_type>,
-                            orig_value_type>;
-
-                        if constexpr (std::is_fundamental_v<value_type> ||
-                                      std::same_as<std::byte,
-                                                   value_type> ||
-                                      concepts::varint<value_type>) {
-                            auto fetch =
-                                [&]() ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
-                                    value_type value;
-                                    if (auto result = archive(value);
-                                        failure(result)) [[unlikely]] {
-                                        return result;
-                                    }
-
-                                    if constexpr (requires {
-                                                      item.push_back(
-                                                          orig_value_type(
-                                                              value));
-                                                  }) {
-                                        item.push_back(
-                                            orig_value_type(value));
-                                    } else {
-                                        item.insert(
-                                            orig_value_type(value));
-                                    }
-
-                                    return errc{};
-                                };
-                            if (field_type !=
-                                wire_type::length_delimited) [[unlikely]] {
-                                return fetch();
-                            }
-                            vsize_t length;
-                            if (auto result = archive(length);
-                                failure(result)) [[unlikely]] {
-                                return result;
-                            }
-
-                            if constexpr (requires { item.resize(1); } &&
-                                          (std::is_fundamental_v<
-                                               value_type> ||
-                                           std::same_as<value_type,
-                                                        std::byte>)) {
-                                item.resize(length / sizeof(value_type));
-                                return archive(unsized(item));
-                            } else {
-                                if constexpr (requires { item.reserve(1); }) {
-                                    item.reserve(length);
-                                }
-
-                                auto end_position =
-                                    length + archive.position();
-                                while (archive.position() < end_position) {
-                                    if (auto result = fetch(); failure(result))
-                                        [[unlikely]] {
-                                        return result;
-                                    }
-                                }
-
-                                return errc{};
-                            }
-                        } else {
-                            std::aligned_storage_t<sizeof(value_type),
-                                                   alignof(value_type)>
-                                storage;
-
-                            constexpr auto destructor =
-                                [](auto pointer) constexpr
-                            {
-                                access::destruct(*pointer);
-                            };
-
-                            std::unique_ptr<value_type,
-                                            decltype(destructor)>
-                                object(access::placement_new<value_type>(
-                                    std::addressof(storage)));
-                            if (auto result = archive(*object);
-                                failure(result)) [[unlikely]] {
-                                return result;
-                            }
-
-                            if constexpr (requires {
-                                              item.push_back(
-                                                  std::move(*object));
-                                          }) {
-                                item.push_back(std::move(*object));
-                            } else {
-                                item.insert(std::move(*object));
-                            }
-
-                            return errc{};
-                        }
                     }
-                });
+
+                    return errc{};
+                }
+            } else {
+                std::aligned_storage_t<sizeof(value_type),
+                                       alignof(value_type)>
+                    storage;
+
+                constexpr auto destructor = [](auto pointer) constexpr
+                {
+                    access::destruct(*pointer);
+                };
+
+                std::unique_ptr<value_type, decltype(destructor)> object(
+                    access::placement_new<value_type>(
+                        std::addressof(storage)));
+                if (auto result = archive(*object); failure(result))
+                    [[unlikely]] {
+                    return result;
+                }
+
+                if constexpr (requires {
+                                  item.push_back(std::move(*object));
+                              }) {
+                    item.push_back(std::move(*object));
+                } else {
+                    item.insert(std::move(*object));
+                }
+
+                return errc{};
+            }
         }
     }
 };
