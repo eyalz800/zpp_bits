@@ -1072,8 +1072,8 @@ struct example
 
     using serialize = zpp::bits::protocol<
         zpp::bits::pb{
-            zpp::bits::pb_map<1, 20>{},
-            zpp::bits::pb_map<2, 30>{}}>;
+            zpp::bits::pb_map<1, 20>{}, // Map first member to field number 20.
+            zpp::bits::pb_map<2, 30>{}}>; // Map second member to field number 30.
 };
 ```
 
