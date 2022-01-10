@@ -3941,7 +3941,7 @@ using pb_field =
 template <typename... Options>
 struct pb
 {
-    using simple = pb<>;
+    using pb_default = pb<>;
 
     constexpr pb(Options && ...)
     {
@@ -4074,6 +4074,16 @@ struct pb
                              concepts::varint<type> ||
                              concepts::empty<type>) {
             return true;
+        } else if constexpr (concepts::associative_container<type> &&
+                             requires { typename type::mapped_type; }) {
+            static_assert(
+                requires {
+                    type{}.push_back(typename type::value_type{});
+                } ||
+                requires { type{}.insert(typename type::value_type{}); });
+            static_assert(check_type<typename type::key_type>());
+            static_assert(check_type<typename type::mapped_type>());
+            return true;
         } else if constexpr (concepts::container<type>) {
             static_assert(
                 requires {
@@ -4084,9 +4094,9 @@ struct pb
             return true;
         } else if constexpr (concepts::by_protocol<type>) {
             static_assert(
-                std::same_as<simple,
+                std::same_as<pb_default,
                              typename decltype(access::get_protocol<
-                                               type>())::simple>);
+                                               type>())::pb_default>);
             static_assert(unique_field_numbers<type>());
             return true;
         } else {
@@ -4254,6 +4264,40 @@ struct pb
                 return result;
             }
             return {};
+        } else if constexpr (concepts::associative_container<type> &&
+                             requires { typename type::mapped_type; }) {
+            constexpr auto tag = make_tag<tag_type, Index>();
+
+            using key_type = std::conditional_t<
+                std::is_enum_v<typename type::key_type> &&
+                    !std::same_as<typename type::key_type, std::byte>,
+                varint<typename type::key_type>,
+                typename type::key_type>;
+
+            using mapped_type = std::conditional_t<
+                std::is_enum_v<typename type::mapped_type> &&
+                    !std::same_as<typename type::mapped_type, std::byte>,
+                varint<typename type::mapped_type>,
+                typename type::mapped_type>;
+
+            struct value_type
+            {
+                const key_type & key;
+                const mapped_type & value;
+
+                using serialize = protocol<pb_default{}>;
+                serialize use();
+            };
+
+            for (auto & [key, value] : item) {
+                if (auto result = archive(
+                        tag, value_type{.key = key, .value = value});
+                    failure(result)) [[unlikely]] {
+                    return result;
+                }
+            }
+
+            return {};
         } else if constexpr (requires {
                                  requires std::is_fundamental_v<
                                      typename type::value_type> ||
@@ -4410,6 +4454,11 @@ struct pb
         using type = std::remove_reference_t<decltype(item)>;
         static_assert(check_type<type>());
 
+        constexpr auto destructor = [](auto pointer) constexpr
+        {
+            access::destruct(*pointer);
+        };
+
         if constexpr (std::is_enum_v<type>) {
             varint<type> value;
             if (auto result = archive(value); failure(result))
@@ -4425,6 +4474,42 @@ struct pb
                 static_cast<typename type::pb_field_type &>(item));
         } else if constexpr (!concepts::container<type>) {
             return archive(item);
+        } else if constexpr (concepts::associative_container<type> &&
+                             requires { typename type::mapped_type; }) {
+            using key_type = std::conditional_t<
+                std::is_enum_v<typename type::key_type> &&
+                    !std::same_as<typename type::key_type, std::byte>,
+                varint<typename type::key_type>,
+                typename type::key_type>;
+
+            using mapped_type = std::conditional_t<
+                std::is_enum_v<typename type::mapped_type> &&
+                    !std::same_as<typename type::mapped_type, std::byte>,
+                varint<typename type::mapped_type>,
+                typename type::mapped_type>;
+
+            struct value_type
+            {
+                key_type key;
+                mapped_type value;
+
+                using serialize = protocol<pb_default{}>;
+                serialize use();
+            };
+
+            std::aligned_storage_t<sizeof(value_type),
+                                   alignof(value_type)>
+                storage;
+
+            std::unique_ptr<value_type, decltype(destructor)> object(
+                access::placement_new<value_type>(std::addressof(storage)));
+            if (auto result = archive(*object);
+                failure(result)) [[unlikely]] {
+                return result;
+            }
+
+            item.emplace(std::move(object->key), std::move(object->value));
+            return errc{};
         } else {
             using orig_value_type = typename type::value_type;
             using value_type = std::conditional_t<
@@ -4488,11 +4573,6 @@ struct pb
                 std::aligned_storage_t<sizeof(value_type),
                                        alignof(value_type)>
                     storage;
-
-                constexpr auto destructor = [](auto pointer) constexpr
-                {
-                    access::destruct(*pointer);
-                };
 
                 std::unique_ptr<value_type, decltype(destructor)> object(
                     access::placement_new<value_type>(
