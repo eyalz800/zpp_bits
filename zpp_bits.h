@@ -3873,7 +3873,8 @@ struct pb_field_fundamental
 };
 
 template <typename Type, auto FieldNumber>
-decltype(auto) pb_value(pb_field_fundamental<Type, FieldNumber> & pb)
+constexpr decltype(auto)
+pb_value(pb_field_fundamental<Type, FieldNumber> & pb)
 {
     return static_cast<
         typename pb_field_fundamental<Type, FieldNumber>::pb_field_type &>(
@@ -3881,7 +3882,7 @@ decltype(auto) pb_value(pb_field_fundamental<Type, FieldNumber> & pb)
 }
 
 template <typename Type, auto FieldNumber>
-auto pb_value(const pb_field_fundamental<Type, FieldNumber> & pb)
+constexpr auto pb_value(const pb_field_fundamental<Type, FieldNumber> & pb)
 {
     return static_cast<
         typename pb_field_fundamental<Type, FieldNumber>::pb_field_type>(
@@ -3910,21 +3911,22 @@ struct pb_field_struct : Type
 };
 
 template <typename Type, auto FieldNumber>
-decltype(auto) pb_value(pb_field_struct<Type, FieldNumber> & pb)
+constexpr decltype(auto) pb_value(pb_field_struct<Type, FieldNumber> & pb)
 {
     return static_cast<
         typename pb_field_struct<Type, FieldNumber>::pb_field_type &>(pb);
 }
 
 template <typename Type, auto FieldNumber>
-decltype(auto) pb_value(const pb_field_struct<Type, FieldNumber> & pb)
+constexpr decltype(auto)
+pb_value(const pb_field_struct<Type, FieldNumber> & pb)
 {
     return static_cast<const typename pb_field_struct<Type, FieldNumber>::
                            pb_field_type &>(pb);
 }
 
 template <typename Type, auto FieldNumber>
-decltype(auto) pb_value(pb_field_struct<Type, FieldNumber> && pb)
+constexpr decltype(auto) pb_value(pb_field_struct<Type, FieldNumber> && pb)
 {
     return static_cast<
         typename pb_field_struct<Type, FieldNumber>::pb_field_type &&>(pb);
