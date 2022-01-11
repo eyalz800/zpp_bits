@@ -3910,6 +3910,8 @@ struct pb_reserved
 template <std::size_t From, std::size_t To>
 struct pb_map
 {
+    static_assert(From != 0 && To != 0);
+
     constexpr static unsigned int mapped_field(auto index)
     {
         return ((index + 1) == From) ? To : 0u;
@@ -4051,6 +4053,10 @@ struct pb
                                   std::declval<std::tuple<Types...>>()))>::
                                   pb_field_number;
                           }) {
+                static_assert(0 !=
+                              std::remove_cvref_t<decltype(std::get<Index>(
+                                  std::declval<std::tuple<Types...>>()))>::
+                                  pb_field_number);
                 return std::integral_constant<
                     unsigned int,
                     std::remove_cvref_t<decltype(std::get<Index>(
