@@ -311,6 +311,43 @@ TEST(test_pb_protocol, person)
     EXPECT_EQ(data, new_data);
 }
 
+TEST(test_pb_protocol, address_book)
+{
+    constexpr auto data =
+        "\n-\n\x08John Doe\x10\xd2\t\x1a\x10jdoe@example.com\"\x0c\n\x08"
+        "555-4321\x10\x01\n>\n\nJohn Doe "
+        "2\x10\xd3\t\x1a\x11jdoe2@example.com\"\x0c\n\x08"
+        "555-4322\x10\x01\"\x0c\n\x08"
+        "555-4323\x10\x02"_b;
+
+    static_assert(data.size() == 111);
+
+    address_book b;
+    zpp::bits::in{data, zpp::bits::no_size{}}(b).or_throw();
+
+    ASSERT_EQ(b.people.size(), 2u);
+    EXPECT_EQ(b.people[0].name, "John Doe");
+    EXPECT_EQ(b.people[0].id, 1234);
+    EXPECT_EQ(b.people[0].email, "jdoe@example.com");
+    ASSERT_EQ(b.people[0].phones.size(), 1u);
+    EXPECT_EQ(b.people[0].phones[0].number, "555-4321");
+    EXPECT_EQ(b.people[0].phones[0].type, person::home);
+    EXPECT_EQ(b.people[1].name, "John Doe 2");
+    EXPECT_EQ(b.people[1].id, 1235);
+    EXPECT_EQ(b.people[1].email, "jdoe2@example.com");
+    ASSERT_EQ(b.people[1].phones.size(), 2u);
+    EXPECT_EQ(b.people[1].phones[0].number, "555-4322");
+    EXPECT_EQ(b.people[1].phones[0].type, person::home);
+    EXPECT_EQ(b.people[1].phones[1].number, "555-4323");
+    EXPECT_EQ(b.people[1].phones[1].type, person::work);
+
+    std::array<std::byte, data.size()> new_data;
+    zpp::bits::out out{new_data, zpp::bits::no_size{}};
+    out(b).or_throw();
+    EXPECT_EQ(out.position(), data.size());
+    EXPECT_EQ(data, new_data);
+}
+
 struct person_explicit
 {
     zpp::bits::pb_field<std::string, 10> extra;
