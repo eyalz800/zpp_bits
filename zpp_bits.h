@@ -4507,6 +4507,9 @@ struct pb
     {
         using type = std::remove_reference_t<decltype(item)>;
         if constexpr (Index >= number_of_members<type>()) {
+            if (!field_num) [[unlikely]] {
+                return errc{std::errc::protocol_error};
+            }
             return errc{};
         } else if (field_number_from_struct<type, Index>() != field_num) {
             return deserialize_field<Index + 1>(
