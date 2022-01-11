@@ -558,6 +558,31 @@ using default_size_type_t =
                        decltype(get_default_size_type(
                            std::declval<Options>()...))>;
 
+template <typename Option, typename... Options>
+constexpr auto get_alloc_limit()
+{
+    if constexpr (requires {
+                      std::remove_cvref_t<
+                          Option>::alloc_limit_value;
+                  }) {
+        return std::remove_cvref_t<Option>::alloc_limit_value;
+    } else if constexpr (sizeof...(Options) != 0) {
+        return get_alloc_limit<Options...>();
+    } else {
+        return std::numeric_limits<std::size_t>::max();
+    }
+}
+
+template <typename... Options>
+constexpr auto alloc_limit()
+{
+    if constexpr (sizeof...(Options) != 0) {
+        return get_alloc_limit<Options...>();
+    } else {
+        return std::numeric_limits<std::size_t>::max();
+    }
+}
+
 template <typename Type>
 constexpr auto underlying_type_generic()
 {
@@ -827,9 +852,12 @@ struct option
     }
 };
 
+inline namespace options
+{
 struct append : option<append>
 {
 };
+
 struct reserve : option<reserve>
 {
     constexpr explicit reserve(std::size_t size) : size(size)
@@ -837,12 +865,19 @@ struct reserve : option<reserve>
     }
     std::size_t size{};
 };
+
 struct resize : option<resize>
 {
     constexpr explicit resize(std::size_t size) : size(size)
     {
     }
     std::size_t size{};
+};
+
+template <std::size_t Size>
+struct alloc_limit : option<alloc_limit<Size>>
+{
+    constexpr static auto alloc_limit_value = Size;
 };
 
 namespace endian
@@ -895,6 +930,7 @@ struct size_native : option<size_native>
 {
     using default_size_type = std::size_t;
 };
+} // namespace options
 
 constexpr auto success(std::errc code)
 {
@@ -1378,7 +1414,10 @@ constexpr auto ZPP_BITS_INLINE serialize(
 
     auto size = varint_size(value);
     if constexpr (Archive::resizable) {
-        archive.enlarge_for(size);
+        if (auto result = archive.enlarge_for(size); failure(result))
+            [[unlikely]] {
+            return result;
+        }
     }
 
     auto data = archive.remaining_data();
@@ -1448,10 +1487,13 @@ using vsint64_t = varint<std::int64_t, varint_encoding::zig_zag>;
 
 using vsize_t = varint<std::size_t>;
 
+inline namespace options
+{
 struct size_varint : option<size_varint>
 {
     using default_size_type = vsize_t;
 };
+} // namespace options
 
 template <concepts::byte_view ByteView, typename... Options>
 class basic_out
@@ -1487,6 +1529,8 @@ public:
          std::same_as<std::remove_cvref_t<Options>, endian::swapped>);
 
     using default_size_type = traits::default_size_type_t<Options...>;
+
+    constexpr static auto allocation_limit = traits::alloc_limit<Options...>();
 
     constexpr static bool resizable = requires(ByteView view)
     {
@@ -1551,12 +1595,23 @@ public:
         return kind::out;
     }
 
-    constexpr void ZPP_BITS_INLINE enlarge_for(auto additional_size)
+    constexpr errc ZPP_BITS_INLINE enlarge_for(auto additional_size)
     {
         auto size = m_data.size();
         if (additional_size > size - m_position) [[unlikely]] {
-            m_data.resize((additional_size + size) * 3 / 2);
+            auto new_size = (additional_size + size) * 3 / 2;
+            if (new_size < size) [[unlikely]] {
+                return std::errc::value_too_large;
+            }
+            if constexpr (allocation_limit !=
+                          std::numeric_limits<std::size_t>::max()) {
+                if (new_size > allocation_limit) [[unlikely]] {
+                    return std::errc::message_size;
+                }
+            }
+            m_data.resize(new_size);
         }
+        return {};
     }
 
 protected:
@@ -1607,14 +1662,16 @@ protected:
         } else if constexpr (requires { serialize(*this, item); }) {
             return serialize(*this, item);
         } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
-            auto size = m_data.size();
-            if (sizeof(item) > size - m_position) [[unlikely]] {
-                if constexpr (resizable) {
-                    m_data.resize((sizeof(item) + size) * 3 / 2);
-                } else {
-                    return std::errc::result_out_of_range;
+            if constexpr (resizable) {
+                if (auto result = enlarge_for(sizeof(item));
+                    failure(result)) [[unlikely]] {
+                    return result;
                 }
+            } else if (sizeof(item) > m_data.size() - m_position)
+                [[unlikely]] {
+                return std::errc::result_out_of_range;
             }
+
             if (std::is_constant_evaluated()) {
                 auto value = std::bit_cast<
                     std::array<std::remove_const_t<byte_type>,
@@ -1650,15 +1707,17 @@ protected:
                 concepts::byte_type<
                     std::remove_cvref_t<decltype(*item.data())>>);
 
-            auto size = m_data.size();
             auto item_size_in_bytes = item.size_in_bytes();
-            if (item_size_in_bytes > size - m_position) [[unlikely]] {
-                if constexpr (resizable) {
-                    m_data.resize((item_size_in_bytes + size) * 3 / 2);
-                } else {
-                    return std::errc::result_out_of_range;
+            if constexpr (resizable) {
+                if (auto result = enlarge_for(item_size_in_bytes);
+                    failure(result)) [[unlikely]] {
+                    return result;
                 }
+            } else if (item_size_in_bytes > m_data.size() - m_position)
+                [[unlikely]] {
+                return std::errc::result_out_of_range;
             }
+
             if (std::is_constant_evaluated()) {
                 auto count = item.count();
                 for (std::size_t index = 0; index < count; ++index) {
@@ -1829,7 +1888,10 @@ protected:
         constexpr auto size_in_bytes = (size + (CHAR_BIT - 1)) / CHAR_BIT;
 
         if constexpr (resizable) {
-            enlarge_for(size_in_bytes);
+            if (auto result = enlarge_for(size_in_bytes);
+                failure(result)) [[unlikely]] {
+                return result;
+            }
         } else if (size_in_bytes > m_data.size() - m_position)
             [[unlikely]] {
             return std::errc::value_too_large;
@@ -1882,7 +1944,10 @@ protected:
                     varint_size(message_size) - preserialized_varint_size;
                 if (move_ahead_count) {
                     if constexpr (resizable) {
-                        enlarge_for(move_ahead_count);
+                        if (auto result = enlarge_for(move_ahead_count);
+                            failure(result)) [[unlikely]] {
+                            return result;
+                        }
                     } else if (move_ahead_count >
                                m_data.size() - current_position)
                         [[unlikely]] {
@@ -2010,11 +2075,14 @@ public:
 
     using byte_type = std::add_const_t<typename ByteView::value_type>;
 
-    static constexpr auto endian_aware =
+    constexpr static auto endian_aware =
         (... ||
          std::same_as<std::remove_cvref_t<Options>, endian::swapped>);
 
     using default_size_type = traits::default_size_type_t<Options...>;
+
+    constexpr static auto allocation_limit =
+        traits::alloc_limit<Options...>();
 
     constexpr explicit in(ByteView && view, Options && ... options) : m_data(view)
     {
@@ -2241,6 +2309,14 @@ private:
             if constexpr (requires(type container) {
                               container.resize(size);
                           }) {
+                if constexpr (allocation_limit !=
+                              std::numeric_limits<std::size_t>::max()) {
+                    constexpr auto limit =
+                        allocation_limit / sizeof(value_type);
+                    if (size > limit) [[unlikely]] {
+                        return std::errc::message_size;
+                    }
+                }
                 container.resize(size);
             } else if constexpr (is_const &&
                                  (std::same_as<std::byte, value_type> ||
@@ -4180,7 +4256,10 @@ struct pb
                           typename archive_type::default_size_type> ||
                       ((std::endian::little != std::endian::native) &&
                        !archive_type::endian_aware)) {
-            out out{archive.data(), size_varint{}, endian::little{}};
+            out out{archive.data(),
+                    size_varint{},
+                    endian::little{},
+                    alloc_limit<archive_type::allocation_limit>{}};
             out.position() = archive.position();
             auto result = visit_members(
                 item,
@@ -4373,7 +4452,9 @@ struct pb
         auto data = archive.remaining_data();
         in in{std::span{data.data(), std::min(size, data.size())},
               size_varint{},
-              endian::little{}};
+              endian::little{},
+              alloc_limit<std::remove_cvref_t<
+                  decltype(archive)>::allocation_limit>{}};
         auto result = deserialize_fields(in, item);
         archive.position() += in.position();
         return result;
@@ -4448,6 +4529,7 @@ struct pb
         auto & archive, wire_type field_type, auto & item)
     {
         using type = std::remove_reference_t<decltype(item)>;
+        using archive_type = std::remove_reference_t<decltype(archive)>;
         static_assert(check_type<type>());
 
         constexpr auto destructor = [](auto pointer) constexpr
@@ -4548,6 +4630,14 @@ struct pb
                 if constexpr (requires { item.resize(1); } &&
                               (std::is_fundamental_v<value_type> ||
                                std::same_as<value_type, std::byte>)) {
+                    if constexpr (archive_type::allocation_limit !=
+                                  std::numeric_limits<
+                                      std::size_t>::max()) {
+                        if (length > archive_type::allocation_limit)
+                            [[unlikely]] {
+                            return errc{std::errc::message_size};
+                        }
+                    }
                     item.resize(length / sizeof(value_type));
                     return archive(unsized(item));
                 } else {
