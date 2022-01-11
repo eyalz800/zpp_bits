@@ -1830,11 +1830,9 @@ protected:
 
         if constexpr (resizable) {
             enlarge_for(size_in_bytes);
-        } else {
-            if (size_in_bytes > m_data.size() - m_position)
-                [[unlikely]] {
-                return std::errc::value_too_large;
-            }
+        } else if (size_in_bytes > m_data.size() - m_position)
+            [[unlikely]] {
+            return std::errc::value_too_large;
         }
 
         auto data = m_data.data() + m_position;
@@ -1885,12 +1883,10 @@ protected:
                 if (move_ahead_count) {
                     if constexpr (resizable) {
                         enlarge_for(move_ahead_count);
-                    } else {
-                        if (move_ahead_count >
-                            m_data.size() - current_position)
-                            [[unlikely]] {
-                            return std::errc::value_too_large;
-                        }
+                    } else if (move_ahead_count >
+                               m_data.size() - current_position)
+                        [[unlikely]] {
+                        return std::errc::value_too_large;
                     }
                     auto data = m_data.data();
                     auto message_start =
