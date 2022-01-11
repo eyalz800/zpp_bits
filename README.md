@@ -965,6 +965,18 @@ auto [in, out] = in_out(data, zpp::bits::append{}, zpp::bits::endian::big{});
 auto [data, in, out] = data_in_out(zpp::bits::size2b{}, zpp::bits::endian::big{});
 ```
 
+Allocation size can be limited in case of output archive to a growing buffer
+or when using an input archive to limit how long a single length prefixed
+message can be to avoid allocation of a very large buffer in advance.
+The intended use is for safety and sanity reasons rather than
+accurate allocation measurement:
+```cpp
+zpp::bits::out out(data, zpp::bits::alloc_limit<0x10000>{});
+zpp::bits::in in(data, zpp::bits::alloc_limit<0x10000>{});
+auto [in, out] = in_out(data, zpp::bits::alloc_limit<0x10000>{});
+auto [data, in, out] = data_in_out(zpp::bits::alloc_limit<0x10000>{});
+```
+
 Variable Length Integers
 ------------------------
 The library provides a type for serializing and deserializing variable
