@@ -2056,7 +2056,7 @@ public:
         if constexpr (resizable && !no_fit_size) {
             auto end = m_data.size();
             auto result = serialize_many(items...);
-            if (m_position > end) {
+            if (m_position >= end) {
                 m_data.resize(m_position);
             }
             return result;
