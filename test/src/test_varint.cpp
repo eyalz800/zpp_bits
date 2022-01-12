@@ -6,7 +6,10 @@ using namespace zpp::bits::literals;
 
 static_assert(zpp::bits::to_bytes<zpp::bits::varint<std::uint32_t>{}>() == "00"_decode_hex);
 static_assert(zpp::bits::from_bytes<"9601"_decode_hex, zpp::bits::vint32_t>() == 150);
+static_assert(zpp::bits::from_bytes<"960100000000000000000000"_decode_hex, zpp::bits::vint32_t>() == 150);
+static_assert(zpp::bits::from_bytes<"960100000000000000000000"_decode_hex, zpp::bits::vsize_t>() == 150);
 static_assert(zpp::bits::from_bytes<"96818000"_decode_hex, zpp::bits::vint32_t>() == 150);
+static_assert(zpp::bits::from_bytes<"96818000"_decode_hex, zpp::bits::vsize_t>() == 150);
 
 static_assert(zpp::bits::to_bytes<zpp::bits::varint{150}>() == "9601"_decode_hex);
 
