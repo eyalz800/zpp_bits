@@ -14,6 +14,7 @@ Contents
 * [Motivation](#motivation)
 * [Introduction](#introduction)
 * [Error Handling](#error-handling)
+* [Error Codes](#error-codes)
 * [Serializing Non-Aggregates](#serializing-non-aggregates)
 * [Serializing Private Classes](#serializing-private_classes)
 * [Explicit Serialization](#explicit-serialization)
@@ -166,7 +167,8 @@ int main()
 }
 ```
 
-### Error Codes
+Error Codes
+-----------
 All of the above methods, use the following error codes internally and can be checked using the comparison
 operator from return value based, or by examining the internal error code of `std::system_error` or `zpp::throwing` depending
 which one you used:
@@ -177,7 +179,7 @@ which one you used:
 5. `std::errc::not_supported` - attempt to call an RPC that is not listed as supported.
 6. `std::errc::bad_message` - attempt to read a variant of unrecognized type.
 7. `std::errc::invalid_argument` - attempting to serialize null pointer or a value-less variant.
-8. `std::errc::protocol_error` - attempt to deserialize an invalid protocol message
+8. `std::errc::protocol_error` - attempt to deserialize an invalid protocol message.
 
 Serializing Non-Aggregates
 --------------------------
