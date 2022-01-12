@@ -977,7 +977,7 @@ auto [in, out] = in_out(data, zpp::bits::alloc_limit<0x10000>{});
 auto [data, in, out] = data_in_out(zpp::bits::alloc_limit<0x10000>{});
 ```
 
-For best correctness, when using growing buffer for output, the buffer is resized
+For best correctness, when using growing buffer for output, if the buffer was grown, the buffer is resized
 in the end for the exact position of the output archive, this incurs an extra resize
 which in most cases is acceptable, but you may avoid this additional resize and recognize
 the end of the buffer by using `position()`. You can achieve this by using `zpp::bits::no_fit_size{}`:
