@@ -1420,9 +1420,9 @@ constexpr auto ZPP_BITS_INLINE serialize(
             (value << 1) ^ (orig_value >> (sizeof(Type) * CHAR_BIT - 1));
     }
 
-    auto size = varint_size(value);
+    constexpr auto max_size = varint_max_size<Type>;
     if constexpr (Archive::resizable) {
-        if (auto result = archive.enlarge_for(size); failure(result))
+        if (auto result = archive.enlarge_for(max_size); failure(result))
             [[unlikely]] {
             return result;
         }
@@ -1430,20 +1430,23 @@ constexpr auto ZPP_BITS_INLINE serialize(
 
     auto data = archive.remaining_data();
     if constexpr (!Archive::resizable) {
-        if (data.size() < size) [[unlikely]] {
-            return errc{std::errc::value_too_large};
+        auto data_size = data.size();
+        if (data_size < max_size) [[unlikely]] {
+            if (data_size < varint_size(value)) [[unlikely]] {
+                return errc{std::errc::value_too_large};
+            }
         }
     }
 
-    for (std::size_t i = 0; i < size; ++i) {
-        auto char_value = static_cast<unsigned char>(value & 0x7f);
+    using byte_type = std::remove_cvref_t<decltype(data[0])>;
+    std::size_t position = {};
+    while (value >= 0x80) {
+        data[position++] = byte_type((value & 0x7f) | 0x80);
         value >>= (CHAR_BIT - 1);
-        char_value |= (value != 0) << (CHAR_BIT - 1);
-        data[i] = static_cast<std::remove_cvref_t<decltype(data[i])>>(
-            char_value);
     }
+    data[position++] = byte_type(value);
 
-    archive.position() += size;
+    archive.position() += position;
     return errc{};
 }
 
