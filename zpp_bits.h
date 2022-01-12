@@ -901,6 +901,10 @@ using swapped = std::
     conditional_t<std::endian::native == std::endian::little, big, little>;
 } // namespace endian
 
+struct no_fit_size : option<no_fit_size>
+{
+};
+
 struct no_size : option<no_size>
 {
     using default_size_type = void;
@@ -2040,9 +2044,13 @@ public:
 
     using base::resizable;
 
+    constexpr static auto no_fit_size =
+        (... ||
+         std::same_as<std::remove_cvref_t<Options>, options::no_fit_size>);
+
     constexpr auto ZPP_BITS_INLINE operator()(auto &&... items)
     {
-        if constexpr (resizable) {
+        if constexpr (resizable && !no_fit_size) {
             auto end = m_data.size();
             auto result = serialize_many(items...);
             if (m_position > end) {
@@ -4299,6 +4307,7 @@ struct pb
                        !archive_type::endian_aware)) {
             out out{archive.data(),
                     size_varint{},
+                    no_fit_size{},
                     endian::little{},
                     alloc_limit<archive_type::allocation_limit>{}};
             out.position() = archive.position();
