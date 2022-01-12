@@ -1478,19 +1478,19 @@ constexpr auto ZPP_BITS_INLINE serialize(
         auto p = data.data();
         do {
             decltype(value) next_byte;
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 0)); if (next_byte < 0x80) { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 1)); if (next_byte < 0x80) { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 0)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 1)); if (next_byte < 0x80) [[likely]] { break; }
             if constexpr (varint_max_size<Type> > 2) {
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 2)); if (next_byte < 0x80) { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 2)); if (next_byte < 0x80) [[likely]] { break; }
             if constexpr (varint_max_size<Type> > 3) {
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 3)); if (next_byte < 0x80) { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 4)); if (next_byte < 0x80) { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 3)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 4)); if (next_byte < 0x80) [[likely]] { break; }
             if constexpr (varint_max_size<Type> > 5) {
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 5)); if (next_byte < 0x80) { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 6)); if (next_byte < 0x80) { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 7)); if (next_byte < 0x80) { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 8)); if (next_byte < 0x80) { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x01) << ((CHAR_BIT - 1) * 9)); if (next_byte < 0x80) { break; } }}}
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 5)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 6)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 7)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 8)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x01) << ((CHAR_BIT - 1) * 9)); if (next_byte < 0x80) [[likely]] { break; } }}}
             return errc{std::errc::value_too_large};
         } while (false);
         if constexpr (varint_encoding::zig_zag == Encoding) {
