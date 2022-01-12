@@ -1383,6 +1383,10 @@ concept varint = requires
 
 } // namespace concepts
 
+template <typename Type>
+constexpr auto varint_max_size = sizeof(Type) * CHAR_BIT / (CHAR_BIT - 1) +
+                                 1;
+
 template <varint_encoding Encoding = varint_encoding::normal>
 constexpr auto ZPP_BITS_INLINE varint_size(auto value)
 {
@@ -1444,30 +1448,61 @@ constexpr auto ZPP_BITS_INLINE serialize(
     Archive & archive,
     varint<Type, Encoding> & self) requires(Archive::kind() == kind::in)
 {
+    auto data = archive.remaining_data();
     auto value = std::conditional_t<
         std::is_enum_v<Type>,
         std::make_unsigned_t<traits::underlying_type_t<Type>>,
         std::make_unsigned_t<Type>>{};
-    auto data = archive.remaining_data();
-    std::size_t shift = 0;
-    for (auto & byte_value : data) {
-        auto char_value = static_cast<unsigned char>(byte_value);
-        value |= decltype(value)(char_value & 0x7f) << shift;
-        if (char_value >= 0x80) [[unlikely]] {
-            shift = (shift + (CHAR_BIT - 1)) % (sizeof(Type) * CHAR_BIT);
-            continue;
+    if (data.size() < varint_max_size<Type>) [[unlikely]] {
+        std::size_t shift = 0;
+        for (auto & byte_value : data) {
+            auto next_byte = decltype(value)(byte_value);
+            value |= (next_byte & 0x7f) << shift;
+            if (next_byte >= 0x80) [[unlikely]] {
+                shift += CHAR_BIT - 1;
+                continue;
+            }
+            if constexpr (varint_encoding::zig_zag == Encoding) {
+                self.value =
+                    decltype(self.value)((value >> 1) ^ -(value & 0x1));
+            } else {
+                self.value = decltype(self.value)(value);
+            }
+            archive.position() +=
+                1 + std::distance(data.data(), &byte_value);
+            return errc{};
         }
+        return errc{std::errc::value_too_large};
+    } else {
+        // clang-format off
+        auto p = data.data();
+        do {
+            decltype(value) next_byte;
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 0)); if (next_byte < 0x80) { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 1)); if (next_byte < 0x80) { break; }
+            if constexpr (varint_max_size<Type> > 2) {
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 2)); if (next_byte < 0x80) { break; }
+            if constexpr (varint_max_size<Type> > 3) {
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 3)); if (next_byte < 0x80) { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 4)); if (next_byte < 0x80) { break; }
+            if constexpr (varint_max_size<Type> > 5) {
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 5)); if (next_byte < 0x80) { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 6)); if (next_byte < 0x80) { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 7)); if (next_byte < 0x80) { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 8)); if (next_byte < 0x80) { break; }
+            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x01) << ((CHAR_BIT - 1) * 9)); if (next_byte < 0x80) { break; } }}}
+            return errc{std::errc::value_too_large};
+        } while (false);
         if constexpr (varint_encoding::zig_zag == Encoding) {
             self.value =
                 decltype(self.value)((value >> 1) ^ -(value & 0x1));
         } else {
             self.value = decltype(self.value)(value);
         }
-        archive.position() += 1 + std::distance(data.data(), &byte_value);
+        archive.position() += std::distance(data.data(), p);
         return errc{};
+        // clang-format on
     }
-
-    return errc{std::errc::value_too_large};
 }
 
 template <typename Archive, typename Type, varint_encoding Encoding>
