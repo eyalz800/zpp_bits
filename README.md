@@ -967,7 +967,7 @@ auto [data, in, out] = data_in_out(zpp::bits::size2b{}, zpp::bits::endian::big{}
 
 Allocation size can be limited in case of output archive to a growing buffer
 or when using an input archive to limit how long a single length prefixed
-message can be to avoid allocation of a very large buffer in advance.
+message can be to avoid allocation of a very large buffer in advance, using `zpp::bits::alloc_limit<L>{}`.
 The intended use is for safety and sanity reasons rather than
 accurate allocation measurement:
 ```cpp
@@ -975,6 +975,14 @@ zpp::bits::out out(data, zpp::bits::alloc_limit<0x10000>{});
 zpp::bits::in in(data, zpp::bits::alloc_limit<0x10000>{});
 auto [in, out] = in_out(data, zpp::bits::alloc_limit<0x10000>{});
 auto [data, in, out] = data_in_out(zpp::bits::alloc_limit<0x10000>{});
+```
+
+For best correctness, when using growing buffer for output, the buffer is resized
+in the end for the exact position of the output archive, this incurs an extra resize
+which in most cases is acceptable, but you may avoid this additional resize and recognize
+the end of the buffer by using `position()`. You can achieve this by using `zpp::bits::no_fit_size{}`:
+```cpp
+zpp::bits::out out(data, zpp::bits::no_fit_size{});
 ```
 
 Variable Length Integers
