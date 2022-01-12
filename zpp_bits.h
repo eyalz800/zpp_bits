@@ -1318,7 +1318,7 @@ struct sized_item_ref
         return serializer.template serialize_one<SizeType>(self.value);
     }
 
-    Type value;
+    Type && value;
 };
 
 template <typename SizeType, typename Type>
