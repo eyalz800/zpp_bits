@@ -136,7 +136,8 @@ TEST(test_pb_protocol, test_repeated_example)
                   {1}, {2}, {3}, {4}, {-1}, {-2}, {-3}, {-4}}));
 }
 
-struct monster {
+struct monster
+{
     enum color
     {
         red,
