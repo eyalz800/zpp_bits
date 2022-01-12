@@ -166,6 +166,19 @@ int main()
 }
 ```
 
+### Error Codes
+All of the above methods, use the following error codes internally and can be checked using the comparison
+operator from return value based, or by examining the internal error code of `std::system_error` or `zpp::throwing` depending
+which one you used:
+1. `std::errc::result_out_of_range` - attempting to write or read from a too short buffer.
+2. `std::errc::no_buffer_space` - growing buffer would grow beyond the allocation limits or overflow.
+3. `std::errc::value_too_large` - varint (variable length integer) encoding is beyond the representation limits.
+4. `std::errc::message_size` - message size is beyond the user defined allocation limits.
+5. `std::errc::not_supported` - attempt to call an RPC that is not listed as supported.
+6. `std::errc::bad_message` - attempt to read a variant of unrecognized type.
+7. `std::errc::invalid_argument` - attempting to serialize null pointer or a value-less variant.
+8. `std::errc::protocol_error` - attempt to deserialize an invalid protocol message
+
 Serializing Non-Aggregates
 --------------------------
 For most non-aggregate types, enabling serialization is a one liner. Here is an example of a non-aggregate

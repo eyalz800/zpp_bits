@@ -10,7 +10,7 @@ TEST(test_alloc_limit, output)
     static_assert(decltype(out)::allocation_limit == limit);
 
     out(1,2,3,4).or_throw();
-    EXPECT_EQ((out(std::array<int, 50>{})), std::errc::message_size);
+    EXPECT_EQ((out(std::array<int, 50>{})), std::errc::no_buffer_space);
 }
 
 TEST(test_alloc_limit, input)

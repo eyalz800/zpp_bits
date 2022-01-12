@@ -1433,7 +1433,7 @@ constexpr auto ZPP_BITS_INLINE serialize(
         auto data_size = data.size();
         if (data_size < max_size) [[unlikely]] {
             if (data_size < varint_size(value)) [[unlikely]] {
-                return errc{std::errc::value_too_large};
+                return errc{std::errc::result_out_of_range};
             }
         }
     }
@@ -1479,7 +1479,7 @@ constexpr auto ZPP_BITS_INLINE serialize(
                 1 + std::distance(data.data(), &byte_value);
             return errc{};
         }
-        return errc{std::errc::value_too_large};
+        return errc{std::errc::result_out_of_range};
     } else {
         // clang-format off
         auto p = data.data();
@@ -1643,12 +1643,12 @@ public:
         if (additional_size > size - m_position) [[unlikely]] {
             auto new_size = (additional_size + size) * 3 / 2;
             if (new_size < size) [[unlikely]] {
-                return std::errc::value_too_large;
+                return std::errc::no_buffer_space;
             }
             if constexpr (allocation_limit !=
                           std::numeric_limits<std::size_t>::max()) {
                 if (new_size > allocation_limit) [[unlikely]] {
-                    return std::errc::message_size;
+                    return std::errc::no_buffer_space;
                 }
             }
             m_data.resize(new_size);
@@ -1936,7 +1936,7 @@ protected:
             }
         } else if (size_in_bytes > m_data.size() - m_position)
             [[unlikely]] {
-            return std::errc::value_too_large;
+            return std::errc::result_out_of_range;
         }
 
         auto data = m_data.data() + m_position;
@@ -1993,7 +1993,7 @@ protected:
                     } else if (move_ahead_count >
                                m_data.size() - current_position)
                         [[unlikely]] {
-                        return std::errc::value_too_large;
+                        return std::errc::result_out_of_range;
                     }
                     auto data = m_data.data();
                     auto message_start =
@@ -2370,13 +2370,13 @@ private:
                                   std::same_as<unsigned char,
                                                value_type>)) {
                 if (size > m_data.size() - m_position) [[unlikely]] {
-                    return std::errc::value_too_large;
+                    return std::errc::result_out_of_range;
                 }
                 container = {m_data.data() + m_position, size};
                 m_position += size;
             } else {
                 if (size > container.size()) [[unlikely]] {
-                    return std::errc::value_too_large;
+                    return std::errc::result_out_of_range;
                 }
                 container = {container.data(), size};
             }
@@ -2406,7 +2406,7 @@ private:
                               }) {
                     if (type::extent > m_data.size() - m_position)
                         [[unlikely]] {
-                        return std::errc::value_too_large;
+                        return std::errc::result_out_of_range;
                     }
                     container = {m_data.data() + m_position, type::extent};
                     m_position += type::extent;
@@ -2686,7 +2686,7 @@ private:
 
         if (size_in_bytes > m_data.size() - m_position)
             [[unlikely]] {
-            return std::errc::value_too_large;
+            return std::errc::result_out_of_range;
         }
 
         auto data = m_data.data() + m_position;
