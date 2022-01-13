@@ -1297,11 +1297,11 @@ Advanced Controls
 -----------------
 By default `zpp::bits` inlines aggressively, but to reduce code size, it does not
 inline the full decoding of varints (variable length integers).
-To configure inlining of the full decoding of varints, define `ZPP_BITS_INLINE_DECODE_VARINT=1`.
+To configure inlining of the full varint decoding, define `ZPP_BITS_INLINE_DECODE_VARINT=1`.
 
 If you suspect that `zpp::bits` is inlining too much to the point where it badly affects code size,
-you may define `ZPP_BITS_INLINE_MODE=0`, which disables all force inlining and observe the results
-usually it has a small effect, but it is provided as is for additional control.
+you may define `ZPP_BITS_INLINE_MODE=0`, which disables all force inlining and observe the results.
+Usually it has a negligible effect, but it is provided as is for additional control.
 
 Benchmark
 ---------
