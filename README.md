@@ -33,7 +33,7 @@ Contents
 * [Reflection](#pointers-as-optionals)
 * [Additional Archive Controls](#additional-archive-controls)
 * [Variable Length Integers](#variable-length-integers)
-* [Protobuf (Experimental)](#protobuf)
+* [Protobuf](#protobuf)
 * [Advanced Controls](#advanced-controls)
 * [Benchmark](#benchmark)
 
@@ -1052,12 +1052,13 @@ The serialization format of this library is not based on any known or accepted f
 Naturally, other languages do not support this format, which makes it near impossible to use
 the library for cross programming language communication.
 
-For this reason the library provides **experimental support**
-support for protobuf, which is available almost everywhere.
+For this reason the library supports to protobuf format
+which is available in many languages.
 
-Please note that protobuf support is highly experimental and may not include
-all of the features, and it is generally slower (around 2-5 times slower) than the stock
-format which aims to be zero overhead.
+Please note that protobuf support is kind of experimental, which means
+it may not include every possible protobuf feature, and it is generally slower
+(around 2-5 times slower, mostly on deserialization) than the default format,
+which aims to be zero overhead.
 
 Starting with the basic message:
 ```cpp
@@ -1142,21 +1143,22 @@ struct example
 ```
 
 Like with `zpp::bits::members`, for when it is required, you may specify the number of members
-in the protocol field:
+in the protocol field with `zpp::bits::pb_members<N>`:
 ```cpp
 struct example
 {
-    using serialize = zpp::bits::protocol<zpp::bits::pb{}, 1>; // 1 member.
+    using serialize = zpp::bits::pb_members<1>; // 1 member.
 
     zpp::bits::vint32_t i; // field number == 1
 };
 ```
 
-The shorter way to do the above is with `zpp::bits::pb_members<N>`:
+The full version of the above involves passing the number of members
+as the second parameter to the protocol:
 ```cpp
 struct example
 {
-    using serialize = zpp::bits::pb_members<1>; // 1 member.
+    using serialize = zpp::bits::protocol<zpp::bits::pb{}, 1>; // 1 member.
 
     zpp::bits::vint32_t i; // field number == 1
 };
