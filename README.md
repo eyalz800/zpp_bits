@@ -1068,8 +1068,8 @@ struct example
 };
 
 // Serialize as protobuf protocol (as usual, can also define this inside the class
-// with `using serialize = zpp::bits::protocol<zpp::bits::pb{}>;`)
-auto serialize(const example &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+// with `using serialize = zpp::bits::pb_protocol;`)
+auto serialize(const example &) -> zpp::bits::pb_protocol;
 
 // Use archives as usual, specify what kind of size to prefix the message with.
 // We chose no size to demonstrate the actual encoding of the message, but in general
@@ -1089,6 +1089,13 @@ static_assert(
     "089601"_decode_hex);
 ```
 
+For the full syntax, which we'll later use to pass more options, use `zpp::bits::protocol`:
+```cpp
+// Serialize as protobuf protocol (as usual, can also define this inside the class
+// with `using serialize = zpp::bits::protocol<zpp::bits::pb{}>;`)
+auto serialize(const example &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+```
+
 To reserve fields:
 ```cpp
 struct example
@@ -1106,7 +1113,7 @@ struct example
     zpp::bits::pb_field<zpp::bits::vint32_t, 20> i; // field number == 20
     zpp::bits::pb_field<zpp::bits::vsint32_t, 30> j; // field number == 30
 
-    using serialize = zpp::bits::protocol<zpp::bits::pb{}>;
+    using serialize = zpp::bits::pb_protocol;
 };
 ```
 Accessing the value behind the field is often transparent however if explicitly needed
@@ -1145,6 +1152,16 @@ struct example
 };
 ```
 
+The shorter way to do the above is with `zpp::bits::pb_members<N>`:
+```cpp
+struct example
+{
+    using serialize = zpp::bits::pb_members<1>; // 1 member.
+
+    zpp::bits::vint32_t i; // field number == 1
+};
+```
+
 Embedded messages are simply nested within the class as data members:
 ```cpp
 struct nested_example
@@ -1152,8 +1169,7 @@ struct nested_example
     example nested; // field number == 1
 };
 
-auto serialize(const nested_example &)
-    -> zpp::bits::protocol<zpp::bits::pb{}>;
+auto serialize(const nested_example &) -> zpp::bits::pb_protocol;
 
 static_assert(zpp::bits::to_bytes<zpp::bits::unsized_t<nested_example>{
                   {.nested = example{150}}}>() == "0a03089601"_decode_hex);
@@ -1163,7 +1179,7 @@ Repeated fields are of the form of owning containers:
 ```cpp
 struct repeating
 {
-    using serialize = zpp::bits::protocol<zpp::bits::pb{}>;
+    using serialize = zpp::bits::pb_protocol;
 
     std::vector<zpp::bits::vint32_t> integers; // field number == 1
     std::string characters; // field number == 2
@@ -1235,9 +1251,9 @@ struct address_book
     std::vector<person> people; // = 1
 };
 
-auto serialize(const person &) -> zpp::bits::protocol<zpp::bits::pb{}>;
-auto serialize(const person::phone_number &) -> zpp::bits::protocol<zpp::bits::pb{}>;
-auto serialize(const address_book &) -> zpp::bits::protocol<zpp::bits::pb{}>;
+auto serialize(const person &) -> zpp::bits::pb_protocol;
+auto serialize(const person::phone_number &) -> zpp::bits::pb_protocol;
+auto serialize(const address_book &) -> zpp::bits::pb_protocol;
 ```
 
 Derserializing a message that was originally serialized with python:

@@ -4819,6 +4819,11 @@ struct pb
     }
 };
 
+using pb_protocol = protocol<pb{}>;
+
+template <std::size_t Members = std::numeric_limits<std::size_t>::max()>
+using pb_members = protocol<pb{}, Members>;
+
 namespace numbers
 {
 template <typename Type>
