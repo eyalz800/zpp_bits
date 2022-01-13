@@ -1,26 +1,6 @@
 #ifndef ZPP_BITS_H
 #define ZPP_BITS_H
 
-#ifndef ZPP_BITS_AUTODETECT_MEMBERS_MODE
-#define ZPP_BITS_AUTODETECT_MEMBERS_MODE (0)
-#endif
-
-#ifndef ZPP_BITS_INLINE
-#if defined __clang__ || defined __GNUC__
-#define ZPP_BITS_INLINE __attribute__((always_inline))
-#if defined __clang__
-#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA __attribute__((always_inline)) constexpr
-#else
-#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr __attribute__((always_inline))
-#endif
-#elif defined _MSC_VER
-#define ZPP_BITS_INLINE __forceinline
-#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
-#endif
-#else // ZPP_BITS_INLINE
-#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
-#endif // ZPP_BITS_INLINE
-
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -49,6 +29,37 @@
 
 #ifdef __cpp_exceptions
 #include <stdexcept>
+#endif
+
+#ifndef ZPP_BITS_AUTODETECT_MEMBERS_MODE
+#define ZPP_BITS_AUTODETECT_MEMBERS_MODE (0)
+#endif
+
+#ifndef ZPP_BITS_INLINE
+#if defined __clang__ || defined __GNUC__
+#define ZPP_BITS_INLINE __attribute__((always_inline))
+#if defined __clang__
+#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA __attribute__((always_inline)) constexpr
+#else
+#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr __attribute__((always_inline))
+#endif
+#elif defined _MSC_VER
+#define ZPP_BITS_INLINE __forceinline
+#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
+#endif
+#else // ZPP_BITS_INLINE
+#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
+#endif // ZPP_BITS_INLINE
+
+#if defined ZPP_BITS_INLINE_MODE && !ZPP_BITS_INLINE_MODE
+#undef ZPP_BITS_INLINE
+#define ZPP_BITS_INLINE
+#undef ZPP_BITS_CONSTEXPR_INLINE_LAMBDA
+#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
+#endif
+
+#ifndef ZPP_BITS_INLINE_DECODE_VARINT
+#define ZPP_BITS_INLINE_DECODE_VARINT (0)
 #endif
 
 namespace zpp::bits
@@ -1450,6 +1461,48 @@ constexpr auto ZPP_BITS_INLINE serialize(
     return errc{};
 }
 
+constexpr auto decode_varint(auto data, auto & value, auto & position)
+{
+    using value_type = std::remove_cvref_t<decltype(value)>;
+    if (data.size() < varint_max_size<value_type>) [[unlikely]] {
+        std::size_t shift = 0;
+        for (auto & byte_value : data) {
+            auto next_byte = value_type(byte_value);
+            value |= (next_byte & 0x7f) << shift;
+            if (next_byte >= 0x80) [[unlikely]] {
+                shift += CHAR_BIT - 1;
+                continue;
+            }
+            position += 1 + std::distance(data.data(), &byte_value);
+            return errc{};
+        }
+        return errc{std::errc::result_out_of_range};
+    } else {
+        auto p = data.data();
+        do {
+            // clang-format off
+            value_type next_byte;
+            next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 0)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 1)); if (next_byte < 0x80) [[likely]] { break; }
+            if constexpr (varint_max_size<value_type> > 2) {
+            next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 2)); if (next_byte < 0x80) [[likely]] { break; }
+            if constexpr (varint_max_size<value_type> > 3) {
+            next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 3)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 4)); if (next_byte < 0x80) [[likely]] { break; }
+            if constexpr (varint_max_size<value_type> > 5) {
+            next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 5)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 6)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 7)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 8)); if (next_byte < 0x80) [[likely]] { break; }
+            next_byte = value_type(*p++); value |= ((next_byte & 0x01) << ((CHAR_BIT - 1) * 9)); if (next_byte < 0x80) [[likely]] { break; } }}}
+            return errc{std::errc::value_too_large};
+            // clang-format on
+        } while (false);
+        position += std::distance(data.data(), p);
+        return errc{};
+    }
+}
+
 template <typename Archive, typename Type, varint_encoding Encoding>
 constexpr auto ZPP_BITS_INLINE serialize(
     Archive & archive,
@@ -1460,55 +1513,81 @@ constexpr auto ZPP_BITS_INLINE serialize(
         std::is_enum_v<Type>,
         std::make_unsigned_t<traits::underlying_type_t<Type>>,
         std::make_unsigned_t<Type>>{};
-    if (data.size() < varint_max_size<Type>) [[unlikely]] {
-        std::size_t shift = 0;
-        for (auto & byte_value : data) {
-            auto next_byte = decltype(value)(byte_value);
-            value |= (next_byte & 0x7f) << shift;
-            if (next_byte >= 0x80) [[unlikely]] {
-                shift += CHAR_BIT - 1;
-                continue;
-            }
-            if constexpr (varint_encoding::zig_zag == Encoding) {
-                self.value =
-                    decltype(self.value)((value >> 1) ^ -(value & 0x1));
-            } else {
-                self.value = decltype(self.value)(value);
-            }
-            archive.position() +=
-                1 + std::distance(data.data(), &byte_value);
-            return errc{};
+
+    if constexpr (!ZPP_BITS_INLINE_DECODE_VARINT) {
+        auto data = archive.remaining_data();
+        using value_type = std::conditional_t<
+            std::is_enum_v<Type>,
+            std::make_unsigned_t<traits::underlying_type_t<Type>>,
+            std::make_unsigned_t<Type>>;
+        value_type value{};
+        auto & position = archive.position();
+        if (!data.empty() && !(value_type(data[0]) & 0x80)) [[likely]] {
+            value = value_type(data[0]);
+            position += 1;
+        } else if (auto result = decode_varint(data, value, position);
+                   failure(result)) [[unlikely]] {
+            return result;
         }
-        return errc{std::errc::result_out_of_range};
-    } else {
-        // clang-format off
-        auto p = data.data();
-        do {
-            decltype(value) next_byte;
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 0)); if (next_byte < 0x80) [[likely]] { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 1)); if (next_byte < 0x80) [[likely]] { break; }
-            if constexpr (varint_max_size<Type> > 2) {
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 2)); if (next_byte < 0x80) [[likely]] { break; }
-            if constexpr (varint_max_size<Type> > 3) {
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 3)); if (next_byte < 0x80) [[likely]] { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 4)); if (next_byte < 0x80) [[likely]] { break; }
-            if constexpr (varint_max_size<Type> > 5) {
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 5)); if (next_byte < 0x80) [[likely]] { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 6)); if (next_byte < 0x80) [[likely]] { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 7)); if (next_byte < 0x80) [[likely]] { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 8)); if (next_byte < 0x80) [[likely]] { break; }
-            next_byte = decltype(value)(*p++); value |= ((next_byte & 0x01) << ((CHAR_BIT - 1) * 9)); if (next_byte < 0x80) [[likely]] { break; } }}}
-            return errc{std::errc::value_too_large};
-        } while (false);
+
         if constexpr (varint_encoding::zig_zag == Encoding) {
             self.value =
                 decltype(self.value)((value >> 1) ^ -(value & 0x1));
         } else {
             self.value = decltype(self.value)(value);
         }
-        archive.position() += std::distance(data.data(), p);
         return errc{};
-        // clang-format on
+    } else {
+        if (data.size() < varint_max_size<Type>) [[unlikely]] {
+            std::size_t shift = 0;
+            for (auto & byte_value : data) {
+                auto next_byte = decltype(value)(byte_value);
+                value |= (next_byte & 0x7f) << shift;
+                if (next_byte >= 0x80) [[unlikely]] {
+                    shift += CHAR_BIT - 1;
+                    continue;
+                }
+                if constexpr (varint_encoding::zig_zag == Encoding) {
+                    self.value = decltype(self.value)((value >> 1) ^
+                                                      -(value & 0x1));
+                } else {
+                    self.value = decltype(self.value)(value);
+                }
+                archive.position() +=
+                    1 + std::distance(data.data(), &byte_value);
+                return errc{};
+            }
+            return errc{std::errc::result_out_of_range};
+        } else {
+            auto p = data.data();
+            do {
+                // clang-format off
+                decltype(value) next_byte;
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 0)); if (next_byte < 0x80) [[likely]] { break; }
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 1)); if (next_byte < 0x80) [[likely]] { break; }
+                if constexpr (varint_max_size<Type> > 2) {
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 2)); if (next_byte < 0x80) [[likely]] { break; }
+                if constexpr (varint_max_size<Type> > 3) {
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 3)); if (next_byte < 0x80) [[likely]] { break; }
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 4)); if (next_byte < 0x80) [[likely]] { break; }
+                if constexpr (varint_max_size<Type> > 5) {
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 5)); if (next_byte < 0x80) [[likely]] { break; }
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 6)); if (next_byte < 0x80) [[likely]] { break; }
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 7)); if (next_byte < 0x80) [[likely]] { break; }
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 8)); if (next_byte < 0x80) [[likely]] { break; }
+                next_byte = decltype(value)(*p++); value |= ((next_byte & 0x01) << ((CHAR_BIT - 1) * 9)); if (next_byte < 0x80) [[likely]] { break; } }}}
+                return errc{std::errc::value_too_large};
+                // clang-format on
+            } while (false);
+            if constexpr (varint_encoding::zig_zag == Encoding) {
+                self.value =
+                    decltype(self.value)((value >> 1) ^ -(value & 0x1));
+            } else {
+                self.value = decltype(self.value)(value);
+            }
+            archive.position() += std::distance(data.data(), p);
+            return errc{};
+        }
     }
 }
 
