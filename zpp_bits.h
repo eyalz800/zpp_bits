@@ -1520,7 +1520,16 @@ constexpr auto ZPP_BITS_INLINE serialize(
         if (!data.empty() && !(value_type(data[0]) & 0x80)) [[likely]] {
             value = value_type(data[0]);
             position += 1;
-        } else if (auto result = decode_varint(data, value, position);
+        } else if (auto result =
+                       std::is_constant_evaluated()
+                           ? decode_varint(data, value, position)
+                           : decode_varint(
+                                 std::span{
+                                     reinterpret_cast<const std::byte *>(
+                                         data.data()),
+                                     data.size()},
+                                 value,
+                                 position);
                    failure(result)) [[unlikely]] {
             return result;
         }
@@ -1532,7 +1541,7 @@ constexpr auto ZPP_BITS_INLINE serialize(
             self.value = decltype(self.value)(value);
         }
         return errc{};
-    } else if (data.size() < varint_max_size<Type>) [[unlikely]] {
+    } else if (data.size() < varint_max_size<value_type>) [[unlikely]] {
         std::size_t shift = 0;
         for (auto & byte_value : data) {
             auto next_byte = decltype(value)(byte_value);
@@ -1559,12 +1568,12 @@ constexpr auto ZPP_BITS_INLINE serialize(
             value_type next_byte;
             next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 0)); if (next_byte < 0x80) [[likely]] { break; }
             next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 1)); if (next_byte < 0x80) [[likely]] { break; }
-            if constexpr (varint_max_size<Type> > 2) {
+            if constexpr (varint_max_size<value_type> > 2) {
             next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 2)); if (next_byte < 0x80) [[likely]] { break; }
-            if constexpr (varint_max_size<Type> > 3) {
+            if constexpr (varint_max_size<value_type> > 3) {
             next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 3)); if (next_byte < 0x80) [[likely]] { break; }
             next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 4)); if (next_byte < 0x80) [[likely]] { break; }
-            if constexpr (varint_max_size<Type> > 5) {
+            if constexpr (varint_max_size<value_type> > 5) {
             next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 5)); if (next_byte < 0x80) [[likely]] { break; }
             next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 6)); if (next_byte < 0x80) [[likely]] { break; }
             next_byte = value_type(*p++); value |= ((next_byte & 0x7f) << ((CHAR_BIT - 1) * 7)); if (next_byte < 0x80) [[likely]] { break; }
