@@ -4590,11 +4590,14 @@ struct pb
                                          std::byte>;
                              }) {
             constexpr auto tag = make_tag<tag_type, Index>();
-            if (auto result =
-                    archive(tag,
-                            varint{item.size() *
-                                   sizeof(typename type::value_type)},
-                            unsized(item));
+            auto size = item.size();
+            if (!size) [[unlikely]] {
+                return {};
+            }
+            if (auto result = archive(
+                    tag,
+                    varint{size * sizeof(typename type::value_type)},
+                    unsized(item));
                 failure(result)) [[unlikely]] {
                 return result;
             }
@@ -4609,6 +4612,9 @@ struct pb
             for (auto & element : item) {
                 size +=
                     varint_size<type::value_type::encoding>(element.value);
+            }
+            if (!size) [[unlikely]] {
+                return {};
             }
             if (auto result = archive(tag, varint{size}, unsized(item));
                 failure(result)) [[unlikely]] {
@@ -4625,6 +4631,9 @@ struct pb
             std::size_t size = {};
             for (auto & element : item) {
                 size += varint_size(std::underlying_type_t<type>(element));
+            }
+            if (!size) [[unlikely]] {
+                return {};
             }
             if (auto result = archive(tag, varint{size}); failure(result))
                 [[unlikely]] {
