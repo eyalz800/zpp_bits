@@ -107,6 +107,62 @@ struct serialization_id
     constexpr static auto value = Id;
 };
 
+constexpr auto success(std::errc code)
+{
+    return std::errc{} == code;
+}
+
+constexpr auto failure(std::errc code)
+{
+    return std::errc{} != code;
+}
+
+struct [[nodiscard]] errc
+{
+    constexpr errc(std::errc code = {}) : code(code)
+    {
+    }
+
+#if __has_include("zpp_throwing.h")
+    constexpr zpp::throwing<void> operator co_await() const
+    {
+        if (failure(code)) [[unlikely]] {
+            return code;
+        }
+        return zpp::void_v;
+    }
+#endif
+
+    constexpr operator std::errc() const
+    {
+        return code;
+    }
+
+    constexpr void or_throw() const
+    {
+        if (failure(code)) [[unlikely]] {
+#ifdef __cpp_exceptions
+            throw std::system_error(std::make_error_code(code));
+#else
+            std::abort();
+#endif
+        }
+    }
+
+    std::errc code;
+};
+
+constexpr auto success(errc code)
+{
+    return std::errc{} == code;
+}
+
+constexpr auto failure(errc code)
+{
+    return std::errc{} != code;
+}
+
+
 struct access
 {
     struct any
@@ -534,7 +590,7 @@ struct visitor
     std::span<std::byte> processed_data();
     std::size_t position() const;
     std::size_t & position();
-    std::errc enlarge_for(std::size_t);
+    errc enlarge_for(std::size_t);
     void reset(std::size_t = 0);
 
     [[no_unique_address]] Visitor visitor;
@@ -946,61 +1002,6 @@ struct size_native : option<size_native>
     using default_size_type = std::size_t;
 };
 } // namespace options
-
-constexpr auto success(std::errc code)
-{
-    return std::errc{} == code;
-}
-
-constexpr auto failure(std::errc code)
-{
-    return std::errc{} != code;
-}
-
-struct [[nodiscard]] errc
-{
-    constexpr errc(std::errc code = {}) : code(code)
-    {
-    }
-
-#if __has_include("zpp_throwing.h")
-    constexpr zpp::throwing<void> operator co_await() const
-    {
-        if (failure(code)) [[unlikely]] {
-            return code;
-        }
-        return zpp::void_v;
-    }
-#endif
-
-    constexpr operator std::errc() const
-    {
-        return code;
-    }
-
-    constexpr void or_throw() const
-    {
-        if (failure(code)) [[unlikely]] {
-#ifdef __cpp_exceptions
-            throw std::system_error(std::make_error_code(code));
-#else
-            std::abort();
-#endif
-        }
-    }
-
-    std::errc code;
-};
-
-constexpr auto success(errc code)
-{
-    return std::errc{} == code;
-}
-
-constexpr auto failure(errc code)
-{
-    return std::errc{} != code;
-}
 
 template <typename Type>
 constexpr auto access::number_of_members()
