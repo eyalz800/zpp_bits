@@ -1722,10 +1722,15 @@ public:
     {
         auto size = m_data.size();
         if (additional_size > size - m_position) [[unlikely]] {
-            auto new_size = (additional_size + size) * 3 / 2;
-            if (new_size < size) [[unlikely]] {
+            auto required_size = size + additional_size;
+            if (required_size < size) [[unlikely]] {
                 return std::errc::no_buffer_space;
             }
+            auto increased = required_size * 3;
+            if (increased / 3 != required_size) [[unlikely]] {
+                return std::errc::no_buffer_space;
+            }
+            auto new_size = increased / 2;
             if constexpr (allocation_limit !=
                           std::numeric_limits<std::size_t>::max()) {
                 if (new_size > allocation_limit) [[unlikely]] {
@@ -1734,8 +1739,7 @@ public:
             }
             m_data.resize(new_size);
         }
-        return {};
-    }
+        return {};}
 
 protected:
     constexpr auto ZPP_BITS_INLINE serialize_many(auto && first_item,
