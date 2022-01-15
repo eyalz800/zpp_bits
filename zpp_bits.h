@@ -1925,9 +1925,17 @@ protected:
                     }
                 }
             } else {
+                // Ignore GCC Issue.
+#if !defined __clang__ && defined __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
                 std::memcpy(m_data.data() + m_position,
                             item.data(),
                             item_size_in_bytes);
+#if !defined __clang__ && defined __GNUC__
+#pragma GCC diagnostic pop
+#endif
             }
             m_position += item_size_in_bytes;
             return {};
