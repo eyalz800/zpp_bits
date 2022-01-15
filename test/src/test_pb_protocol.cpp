@@ -514,4 +514,40 @@ TEST(test_pb_protocol, default_person_in_address_book)
     EXPECT_EQ(new_data, "0a021000"_decode_hex);
 }
 
+TEST(test_pb_protocol, empty_address_book)
+{
+    constexpr auto data = ""_b;
+
+    address_book b;
+    zpp::bits::in{data, zpp::bits::no_size{}}(b).or_throw();
+
+    EXPECT_EQ(b.people.size(), 0u);
+
+    std::array<std::byte, 1> new_data;
+    zpp::bits::out out{new_data, zpp::bits::no_size{}};
+    out(b).or_throw();
+
+    EXPECT_EQ(out.position(), 0u);
+}
+
+TEST(test_pb_protocol, empty_person)
+{
+    constexpr auto data = ""_b;
+
+    person p;
+    zpp::bits::in{data, zpp::bits::no_size{}}(p).or_throw();
+
+    EXPECT_EQ(p.name.size(), 0u);
+    EXPECT_EQ(p.name, "");
+    EXPECT_EQ(p.id, 0);
+    EXPECT_EQ(p.email, "");
+    EXPECT_EQ(p.phones.size(), 0u);
+
+    std::array<std::byte, 2> new_data;
+    zpp::bits::out out{new_data, zpp::bits::no_size{}};
+    out(p).or_throw();
+    EXPECT_EQ(out.position(), 2u);
+    EXPECT_EQ(new_data, "1000"_decode_hex);
+}
+
 } // namespace test_pb_protocol
