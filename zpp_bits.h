@@ -650,6 +650,31 @@ constexpr auto alloc_limit()
     }
 }
 
+template <typename Option, typename... Options>
+constexpr auto get_enlarger()
+{
+    if constexpr (requires {
+                      std::remove_cvref_t<
+                          Option>::enlarger_value;
+                  }) {
+        return std::remove_cvref_t<Option>::enlarger_value;
+    } else if constexpr (sizeof...(Options) != 0) {
+        return get_enlarger<Options...>();
+    } else {
+        return std::tuple{3, 2};
+    }
+}
+
+template <typename... Options>
+constexpr auto enlarger()
+{
+    if constexpr (sizeof...(Options) != 0) {
+        return get_enlarger<Options...>();
+    } else {
+        return std::tuple{3, 2};
+    }
+}
+
 template <typename Type>
 constexpr auto underlying_type_generic()
 {
@@ -947,6 +972,15 @@ struct alloc_limit : option<alloc_limit<Size>>
     constexpr static auto alloc_limit_value = Size;
 };
 
+template <std::size_t Multiplier, std::size_t Divisor = 1>
+struct enlarger : option<enlarger<Multiplier, Divisor>>
+{
+    constexpr static auto enlarger_value =
+        std::tuple{Multiplier, Divisor};
+};
+
+using exact_enlarger = enlarger<1, 1>;
+
 namespace endian
 {
 struct big : option<big>
@@ -969,6 +1003,14 @@ using swapped = std::
 } // namespace endian
 
 struct no_fit_size : option<no_fit_size>
+{
+};
+
+struct no_enlarge_overflow : option<no_enlarge_overflow>
+{
+};
+
+struct enlarge_overflow : option<enlarge_overflow>
 {
 };
 
@@ -1656,6 +1698,12 @@ public:
 
     constexpr static auto allocation_limit = traits::alloc_limit<Options...>();
 
+    constexpr static auto enlarger = traits::enlarger<Options...>();
+
+    constexpr static auto no_enlarge_overflow =
+        (... ||
+         std::same_as<std::remove_cvref_t<Options>, options::no_enlarge_overflow>);
+
     constexpr static bool resizable = requires(ByteView view)
     {
         view.resize(1);
@@ -1723,15 +1771,29 @@ public:
     {
         auto size = m_data.size();
         if (additional_size > size - m_position) [[unlikely]] {
+            constexpr auto multiplier = std::get<0>(enlarger);
+            constexpr auto divisor = std::get<1>(enlarger);
+            static_assert(multiplier != 0 && divisor != 0);
+
             auto required_size = size + additional_size;
-            if (required_size < size) [[unlikely]] {
-                return std::errc::no_buffer_space;
+            if constexpr (!no_enlarge_overflow) {
+                if (required_size < size) [[unlikely]] {
+                    return std::errc::no_buffer_space;
+                }
             }
-            auto increased = required_size * 3;
-            if (increased / 3 != required_size) [[unlikely]] {
-                return std::errc::no_buffer_space;
+
+            auto new_size = required_size;
+            if constexpr (multiplier != 1) {
+                new_size *= multiplier;
+                if constexpr (!no_enlarge_overflow) {
+                    if (new_size / multiplier != required_size) [[unlikely]] {
+                        return std::errc::no_buffer_space;
+                    }
+                }
             }
-            auto new_size = increased / 2;
+            if constexpr (divisor != 1) {
+                new_size /= divisor;
+            }
             if constexpr (allocation_limit !=
                           std::numeric_limits<std::size_t>::max()) {
                 if (new_size > allocation_limit) [[unlikely]] {
@@ -4399,6 +4461,11 @@ struct pb
                     size_varint{},
                     no_fit_size{},
                     endian::little{},
+                    enlarger<std::get<0>(archive_type::enlarger),
+                             std::get<1>(archive_type::enlarger)>{},
+                    std::conditional_t<archive_type::no_enlarge_overflow,
+                                       no_enlarge_overflow,
+                                       enlarge_overflow>{},
                     alloc_limit<archive_type::allocation_limit>{}};
             out.position() = archive.position();
             auto result = visit_members(

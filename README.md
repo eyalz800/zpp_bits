@@ -1001,6 +1001,22 @@ the end of the buffer by using `position()`. You can achieve this by using `zpp:
 zpp::bits::out out(data, zpp::bits::no_fit_size{});
 ```
 
+To control enlarging of output archive vector, you may use `zpp::bits::enlarger<Mul, Div = 1>`:
+```cpp
+zpp::bits::out out(data, zpp::bits::enlarger<2>{}); // Grow by multiplying size by 2.
+zpp::bits::out out(data, zpp::bits::enlarger<3, 2>{}); // Default - Grow by multiplying size by 3 and divide by 2 (enlarge by 1.5).
+zpp::bits::out out(data, zpp::bits::exact_enlarger{}); // Grow to exact size every time.
+```
+
+By default, for safety, an output archive that uses a growing buffer, checks for overflow
+before any buffer grow. For 64 bit systems, this check although cheap, is almost redundant,
+as it is almost impossible to overflow a 64 bit integer when this represents a memory size, (i.e,
+the memory allocation will fail before the memory comes close to overflow this integer).
+If you wish to disable those overflow checks, in favor of performance, use: `zpp::bits::no_enlarge_overflow{}`:
+```cpp
+zpp::bits::out out(data, zpp::bits::no_enlarge_overflow{}); // Disable overflow check when enlarging.
+```
+
 Variable Length Integers
 ------------------------
 The library provides a type for serializing and deserializing variable
