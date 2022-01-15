@@ -534,7 +534,7 @@ struct visitor
     std::span<std::byte> processed_data();
     std::size_t position() const;
     std::size_t & position();
-    void enlarge_for(std::size_t);
+    std::errc enlarge_for(std::size_t);
     void reset(std::size_t = 0);
 
     [[no_unique_address]] Visitor visitor;
