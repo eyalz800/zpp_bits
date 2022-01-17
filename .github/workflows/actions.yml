@@ -73,14 +73,12 @@ jobs:
         run: |
           curl -fLo llvm.sh https://apt.llvm.org/llvm.sh
           chmod +x ./llvm.sh
-          sudo ./llvm.sh ${{ matrix.config.compiler_version }}
+          sudo ./llvm.sh ${{ matrix.config.compiler_version }} all
           sudo apt install -y libc++-${{ matrix.config.compiler_version }}-dev libc++abi-${{ matrix.config.compiler_version }}-dev libunwind-${{ matrix.config.compiler_version }}-dev
           sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${{ matrix.config.compiler_version }} ${{ matrix.config.compiler_version }}00
       - name: 'install (ubuntu, gcc)'
         if: matrix.config.os == 'ubuntu' && matrix.config.compiler == 'gcc'
         run: |
-          curl -fLo llvm.sh https://apt.llvm.org/llvm.sh
-          chmod +x ./llvm.sh
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt install gcc-${{ matrix.config.compiler_version }} g++-${{ matrix.config.compiler_version }}
       - name: 'install (macos)'

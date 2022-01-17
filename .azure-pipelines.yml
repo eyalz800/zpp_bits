@@ -53,15 +53,13 @@ steps:
 - script: |
     curl -fLo llvm.sh https://apt.llvm.org/llvm.sh
     chmod +x ./llvm.sh
-    sudo ./llvm.sh $(CLANG_VERSION)
+    sudo ./llvm.sh $(CLANG_VERSION) all
     sudo apt install -y libc++-$(CLANG_VERSION)-dev libc++abi-$(CLANG_VERSION)-dev libunwind-$(CLANG_VERSION)-dev
     sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-$(CLANG_VERSION) $(CLANG_VERSION)00
   displayName: 'install (linux)'
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
 
 - script: |
-    curl -fLo llvm.sh https://apt.llvm.org/llvm.sh
-    chmod +x ./llvm.sh
     sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
     sudo apt install gcc-$(GCC_VERSION) g++-$(GCC_VERSION)
   displayName: 'install (linux)'
