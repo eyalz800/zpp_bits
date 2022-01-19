@@ -1337,6 +1337,22 @@ If you suspect that `zpp::bits` is inlining too much to the point where it badly
 you may define `ZPP_BITS_INLINE_MODE=0`, which disables all force inlining and observe the results.
 Usually it has a negligible effect, but it is provided as is for additional control.
 
+In some compilers, you may find always inline to fail with recursive structures (for example a tree graph).
+In these cases it is required to somehow avoid the always inline attribute for the specific case, a trivial
+example would be to use an explicit serialization function:
+```cpp
+struct node
+{
+    constexpr static auto serialize(auto & archive, auto & node)
+    {
+        return archive(node.value, node.nodes);
+    }
+
+    int value;
+    std::vector<node> nodes;
+};
+```
+
 Benchmark
 ---------
 ### [fraillt/cpp_serializers_benchmark](https://github.com/fraillt/cpp_serializers_benchmark/tree/a4c0ebfb083c3b07ad16adc4301c9d7a7951f46e)
