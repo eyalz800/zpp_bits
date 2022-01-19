@@ -5,6 +5,11 @@ namespace test_graph
 
 struct node
 {
+    constexpr static auto serialize(auto & archive, auto & node)
+    {
+        return archive(node.value, node.nodes);
+    }
+
     int value;
     std::vector<node> nodes;
 };
