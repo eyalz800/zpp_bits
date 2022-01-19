@@ -2242,16 +2242,14 @@ out(Type (&)[Size], Options &&...)
 
 template <typename Type, typename SizeType, typename... Options>
 out(sized_item<Type, SizeType> &, Options &&...)
-    -> out<typename sized_item<Type, SizeType>::base, Options...>;
+    -> out<Type, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
 out(const sized_item<Type, SizeType> &, Options &&...)
-    -> out<const typename sized_item<Type, SizeType>::base,
-           Options...>;
+    -> out<const Type, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
-out(sized_item<Type, SizeType> &&, Options && ...)
-    -> out<typename sized_item<Type, SizeType>::base, Options...>;
+out(sized_item<Type, SizeType> &&, Options &&...) -> out<Type, Options...>;
 
 template <concepts::byte_view ByteView = std::vector<std::byte>,
           typename... Options>
@@ -2897,15 +2895,15 @@ in(Type (&)[Size], Options && ...) -> in<std::span<Type, Size>, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
 in(sized_item<Type, SizeType> &, Options && ...)
-    -> in<typename sized_item<Type, SizeType>::base, Options...>;
+    -> in<Type, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
 in(const sized_item<Type, SizeType> &, Options && ...)
-    -> in<const typename sized_item<Type, SizeType>::base, Options...>;
+    -> in<const Type, Options...>;
 
 template <typename Type, typename SizeType, typename... Options>
 in(sized_item<Type, SizeType> &&, Options && ...)
-    -> in<typename sized_item<Type, SizeType>::base, Options...>;
+    -> in<Type, Options...>;
 
 constexpr auto input(auto && view, auto &&... option)
 {
