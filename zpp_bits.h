@@ -1806,7 +1806,7 @@ public:
     }
 
 protected:
-    constexpr auto ZPP_BITS_INLINE serialize_many(auto && first_item,
+    constexpr errc ZPP_BITS_INLINE serialize_many(auto && first_item,
                                                   auto &&... items)
     {
         if (auto result = serialize_one(first_item); failure(result))
@@ -2353,7 +2353,7 @@ public:
                                std::span{std::declval<ByteView &>()})>>;
 
 private:
-    constexpr auto ZPP_BITS_INLINE serialize_many(auto && first_item,
+    constexpr errc ZPP_BITS_INLINE serialize_many(auto && first_item,
                                                   auto &&... items)
     {
         if (auto result = serialize_one(first_item); failure(result))
