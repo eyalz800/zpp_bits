@@ -1339,7 +1339,8 @@ Usually it has a negligible effect, but it is provided as is for additional cont
 
 In some compilers, you may find always inline to fail with recursive structures (for example a tree graph).
 In these cases it is required to somehow avoid the always inline attribute for the specific structure, a trivial
-example would be to use an explicit serialization function:
+example would be to use an explicit serialization function, although most times the library detects such occasions and
+it is not necessary, but the example is provided just in case:
 ```cpp
 struct node
 {

@@ -301,6 +301,12 @@ struct access
     template <typename Type>
     constexpr static auto endian_independent_byte_serializable();
 
+    template <typename Type, typename Self, typename... Visited>
+    struct self_referencing_visitor;
+
+    template <typename Type, typename Self = Type, typename... Visited>
+    constexpr static auto self_referencing();
+
     template <typename Type>
     constexpr static auto has_protocol()
     {
@@ -823,6 +829,41 @@ template <typename Archive, typename Type>
 concept serialize_as_bytes = endian_independent_byte_serializable<Type> ||
     (!endian_aware_archive<Archive> && byte_serializable<Type>);
 
+template <typename Type, typename Reference>
+concept type_references = requires
+{
+    requires container<Type>;
+    requires std::same_as<typename std::remove_cvref_t<Type>::value_type,
+                          std::remove_cvref_t<Reference>>;
+}
+|| requires
+{
+    requires associative_container<Type>;
+    requires std::same_as<typename std::remove_cvref_t<Type>::key_type,
+                          std::remove_cvref_t<Reference>>;
+}
+|| requires
+{
+    requires associative_container<Type>;
+    requires std::same_as<typename std::remove_cvref_t<Type>::mapped_type,
+                          std::remove_cvref_t<Reference>>;
+}
+|| requires (Type && value)
+{
+    requires owning_pointer<Type>;
+    requires std::same_as<std::remove_cvref_t<decltype(*value)>,
+                          std::remove_cvref_t<Reference>>;
+}
+|| requires (Type && value)
+{
+    requires optional<Type>;
+    requires std::same_as<std::remove_cvref_t<decltype(*value)>,
+                          std::remove_cvref_t<Reference>>;
+};
+
+template <typename Type>
+concept self_referencing = access::self_referencing<Type>();
+
 } // namespace concepts
 
 template <typename CharType, std::size_t Size>
@@ -1166,8 +1207,8 @@ constexpr auto access::byte_serializable()
         return false;
     } else if constexpr (!std::is_trivially_copyable_v<type>) {
         return false;
-    } else if constexpr (has_explicit_serialize<Type,
-                                                traits::visitor<Type>>()) {
+    } else if constexpr (has_explicit_serialize<type,
+                                                traits::visitor<type>>()) {
         return false;
     } else if constexpr (
         !requires {
@@ -1225,8 +1266,8 @@ constexpr auto access::endian_independent_byte_serializable()
         return false;
     } else if constexpr (!std::is_trivially_copyable_v<type>) {
         return false;
-    } else if constexpr (has_explicit_serialize<Type,
-                                                traits::visitor<Type>>()) {
+    } else if constexpr (has_explicit_serialize<type,
+                                                traits::visitor<type>>()) {
         return false;
     } else if constexpr (
         !requires {
@@ -1244,6 +1285,55 @@ constexpr auto access::endian_independent_byte_serializable()
             endian_independent_byte_serializable_visitor<type>{})();
     } else {
         return concepts::byte_type<type>;
+    }
+}
+
+template <typename Type, typename Self, typename... Visited>
+struct access::self_referencing_visitor
+{
+    template <typename... Types>
+    constexpr auto operator()() {
+        using type = std::remove_cvref_t<Type>;
+        using self = std::remove_cvref_t<Self>;
+
+        if constexpr (concepts::empty<type>) {
+            return std::false_type{};
+        } else if constexpr ((... || concepts::type_references<
+                                         std::remove_cvref_t<Types>,
+                                         self>)) {
+            return std::true_type{};
+        } else if constexpr ((sizeof...(Visited) != 0) &&
+                             (... || std::same_as<type, Visited>)) {
+            return std::false_type{};
+        } else if constexpr ((... ||
+                              self_referencing<std::remove_cvref_t<Types>,
+                                               self,
+                                               type,
+                                               Visited...>())) {
+            return std::true_type{};
+        } else {
+            return std::false_type{};
+        }
+    }
+};
+
+template <typename Type, typename Self/* = Type*/, typename... Visited>
+constexpr auto access::self_referencing()
+{
+    constexpr auto members_count = number_of_members<Type>();
+    using type = std::remove_cvref_t<Type>;
+    using self = std::remove_cvref_t<Self>;
+
+    if constexpr (members_count < 0) {
+        return false;
+    } else if constexpr (has_explicit_serialize<type,
+                                                traits::visitor<type>>()) {
+        return false;
+    } else if constexpr (members_count == 0) {
+        return false;
+    } else {
+        return visit_members_types<type>(
+            self_referencing_visitor<type, self, Visited...>{})();
     }
 }
 
@@ -1944,6 +2034,12 @@ protected:
         } else if constexpr (concepts::serialize_as_bytes<decltype(*this),
                                                           type>) {
             return serialize_one(as_bytes(item));
+        } else if constexpr (concepts::self_referencing<type>) {
+            return visit_members(
+                item,
+                [&](auto &&... items) constexpr {
+                    return serialize_many(items...);
+                });
         } else {
             return visit_members(
                 item,
@@ -2453,6 +2549,12 @@ private:
         } else if constexpr (concepts::serialize_as_bytes<decltype(*this),
                                                           type>) {
             return serialize_one(as_bytes(item));
+        } else if constexpr (concepts::self_referencing<type>) {
+            return visit_members(
+                item,
+                [&](auto &&... items) constexpr {
+                    return serialize_many(items...);
+                });
         } else {
             return visit_members(
                 item,
@@ -4476,17 +4578,41 @@ struct pb
                                        enlarge_overflow>{},
                     alloc_limit<archive_type::allocation_limit>{}};
             out.position() = archive.position();
-            auto result = visit_members(
+            if constexpr (concepts::self_referencing<type>) {
+                auto result = visit_members(
+                    item,
+                    [&](auto &&... items) constexpr {
+                        static_assert((... && check_type<decltype(items)>()));
+                        return serialize_many(
+                            std::make_index_sequence<sizeof...(items)>{},
+                            out,
+                            items...);
+                    });
+                archive.position() = out.position();
+                return result;
+            } else {
+                auto result = visit_members(
+                    item,
+                    [&](auto &&... items) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                        static_assert((... && check_type<decltype(items)>()));
+                        return serialize_many(
+                            std::make_index_sequence<sizeof...(items)>{},
+                            out,
+                            items...);
+                    });
+                archive.position() = out.position();
+                return result;
+            }
+        } else if constexpr (concepts::self_referencing<type>) {
+            return visit_members(
                 item,
-                [&](auto &&... items) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                [&](auto &&... items) constexpr {
                     static_assert((... && check_type<decltype(items)>()));
                     return serialize_many(
                         std::make_index_sequence<sizeof...(items)>{},
-                        out,
+                        archive,
                         items...);
                 });
-            archive.position() = out.position();
-            return result;
         } else {
             return visit_members(
                 item,
@@ -4738,6 +4864,17 @@ struct pb
         } else if (field_number_from_struct<type, Index>() != field_num) {
             return deserialize_field<Index + 1>(
                 archive, item, field_num, field_type);
+        } else if constexpr (concepts::self_referencing<type>) {
+            return visit_members(
+                item,
+                [&](auto &&... items) constexpr {
+                    std::tuple<decltype(items) &...> refs = {items...};
+                    auto & item = std::get<Index>(refs);
+                    using type = std::remove_reference_t<decltype(item)>;
+                    static_assert(check_type<type>());
+
+                    return deserialize_field(archive, field_type, item);
+                });
         } else {
             return visit_members(
                 item,

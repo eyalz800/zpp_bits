@@ -5,14 +5,18 @@ namespace test_graph
 
 struct node
 {
-    constexpr static auto serialize(auto & archive, auto & node)
-    {
-        return archive(node.value, node.nodes);
-    }
-
     int value;
     std::vector<node> nodes;
 };
+
+struct person
+{
+    std::string name;
+    int age;
+};
+
+static_assert(zpp::bits::concepts::self_referencing<node>);
+static_assert(!zpp::bits::concepts::self_referencing<person>);
 
 TEST(test_graph, tree)
 {
