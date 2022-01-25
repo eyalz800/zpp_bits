@@ -1017,6 +1017,24 @@ If you wish to disable those overflow checks, in favor of performance, use: `zpp
 zpp::bits::out out(data, zpp::bits::no_enlarge_overflow{}); // Disable overflow check when enlarging.
 ```
 
+When serializing explicitly it is often required to identify whether the archive is
+input or output archive, and it is done via the `archive.kind()` static member function,
+and can be done in an `if constexpr`:
+```cpp
+static constexpr auto serialize(auto & archive, auto & self)
+{
+    using archive_type = std::remove_cvref_t<decltype(archive)>;
+
+    if constexpr (archive_type::kind() == zpp::bits::kind::in) {
+        // Input archive
+    } else if constexpr (archive_type::kind() == zpp::bits::kind::out) {
+        // Output archive
+    } else {
+        // No such archive (no need to check for this)
+    }
+}
+```
+
 Variable Length Integers
 ------------------------
 The library provides a type for serializing and deserializing variable
