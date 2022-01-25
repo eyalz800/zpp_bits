@@ -1068,7 +1068,7 @@ The serialization format of this library is not based on any known or accepted f
 Naturally, other languages do not support this format, which makes it near impossible to use
 the library for cross programming language communication.
 
-For this reason the library supports to protobuf format
+For this reason the library supports the protobuf format
 which is available in many languages.
 
 Please note that protobuf support is kind of experimental, which means
