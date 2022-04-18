@@ -5372,7 +5372,7 @@ constexpr auto sha256()
         for (std::size_t i = 0; i < w.size(); ++i) {
             auto s1 = rotate_right(e, 6) ^ rotate_right(e, 11) ^
                       rotate_right(e, 25);
-            auto ch = (e & f) xor ((~e) & g);
+            auto ch = (e & f) ^ ((~e) & g);
             auto temp1 = h + s1 + ch + k[i] + w[i];
             auto s0 = rotate_right(a, 2) ^ rotate_right(a, 13) ^
                       rotate_right(a, 22);
