@@ -98,13 +98,13 @@ steps:
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'gcc'))
 
 - script: |
-    export PATH=/usr/local/opt/llvm/bin:$PATH
+    export PATH=/usr/local/opt/llvm@$(CLANG_VERSION)/bin:/usr/local/opt/llvm/bin:$PATH
     gmake -C test -f zpp.mk -j
   displayName: 'compile-debug (mac)'
   condition: eq(variables['OPERATING_SYSTEM'], 'mac-os')
 
 - script: |
-    export PATH=/usr/local/opt/llvm/bin:$PATH
+    export PATH=/usr/local/opt/llvm@$(CLANG_VERSION)/bin:/usr/local/opt/llvm/bin:$PATH
     gmake -C test -f zpp.mk -j mode=release
   displayName: 'compile-release (mac)'
   condition: eq(variables['OPERATING_SYSTEM'], 'mac-os')

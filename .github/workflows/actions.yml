@@ -85,7 +85,7 @@ jobs:
         if: matrix.config.os == 'macos'
         run: |
           brew install llvm@${{ matrix.config.compiler_version }} make
-          echo "PATH=/usr/local/opt/llvm/bin:$PATH" >> $GITHUB_ENV
+          echo "PATH=/usr/local/opt/llvm@${{ matrix.config.compiler_version }}/bin:/usr/local/opt/llvm/bin:$PATH" >> $GITHUB_ENV
       - name: 'install (zpp_throwing)'
         if: matrix.config.with_zpp_throwing == '1'
         run: |
