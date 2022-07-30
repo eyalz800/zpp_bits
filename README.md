@@ -58,7 +58,8 @@ polymorphic types with fixed 8 bytes of sha1 serialization id.
 
 Introduction
 ------------
-For many types, enabling serialization is zero lines, these types are required to be of aggregate type.
+For many types, enabling serialization is transparent and requires no additional lines of code.
+These types are required to be of aggregate type, with non array members.
 Here is an example of a `person` class with name and age:
 ```cpp
 struct person
@@ -184,7 +185,8 @@ which one you used:
 
 Serializing Non-Aggregates
 --------------------------
-For most non-aggregate types, enabling serialization is a one liner. Here is an example of a non-aggregate
+For most non-aggregate types (or aggregate types with array members),
+enabling serialization is a one liner. Here is an example of a non-aggregate
 `person` class:
 ```cpp
 struct person
