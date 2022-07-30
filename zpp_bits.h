@@ -1095,7 +1095,7 @@ constexpr auto access::number_of_members()
     } else if constexpr (!std::is_class_v<type>) {
         return 0;
     } else if constexpr (concepts::container<type> && requires {
-                             std::integral_constant<
+                             requires std::integral_constant<
                                  std::size_t,
                                  type{}.size()>::value != 0;
                          }) {
@@ -3980,7 +3980,7 @@ struct rpc_impl
                     return errc{};
                 } else if constexpr (
                     requires {
-                        std::same_as<
+                        requires std::same_as<
                             typename decltype(FirstBinding::call(
                                 in, out, context))::value_type,
                             value_or_errc<decltype(FirstBinding::call(
@@ -4088,7 +4088,7 @@ struct rpc_impl
                     co_return;
                 } else if constexpr (
                     requires {
-                        std::same_as<
+                        requires std::same_as<
                             typename decltype(FirstBinding::call(
                                 in, out, context))::value_type,
                             value_or_errc<decltype(FirstBinding::call(
