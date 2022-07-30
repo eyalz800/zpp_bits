@@ -24,13 +24,13 @@ strategy:
       CLANG_VERSION: '12'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
       TEST_AUTODETECT: 0
-    # ubuntu-20.04-gcc:
-    #   VM_IMAGE: 'ubuntu-20.04'
-    #   OPERATING_SYSTEM: 'linux'
-    #   COMPILER: 'gcc'
-    #   GCC_VERSION: '11'
-    #   ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
-    #   TEST_AUTODETECT: 0
+    ubuntu-20.04-gcc:
+      VM_IMAGE: 'ubuntu-20.04'
+      OPERATING_SYSTEM: 'linux'
+      COMPILER: 'gcc'
+      GCC_VERSION: '12'
+      ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+      TEST_AUTODETECT: 0
     macOS-10.15:
       VM_IMAGE: 'macOS-10.15'
       OPERATING_SYSTEM: 'mac-os'
