@@ -142,7 +142,7 @@ int main()
 ```
 
 ### Using zpp::throwing
-Another option is [zpp::throwing](https://github.com/eyalz800/zpp_throwing) it turns into two simple `co_await`s,
+Another option is [zpp::throwing](https://github.com/eyalz800/zpp_throwing) where error checking turns into two simple `co_await`s,
 to understand how to check for error we provide a full main function:
 ```cpp
 int main()
@@ -221,7 +221,7 @@ auto serialize(const person & person) -> zpp::bits::members<2>;
 ```
 
 In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and `unevaluated lambda expression`. It means
-that even with aggregate types the number of members can be detected automatically in cases where all members are in the same struct.
+that even with non aggregate types the number of members can be detected automatically in cases where all members are in the same struct.
 To opt-in, define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`.
 ```cpp
 // Members are detected automatically, no additional change needed.
