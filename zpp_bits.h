@@ -931,39 +931,52 @@ public:
     using value_type = Item;
 
     constexpr explicit bytes(std::span<Item> items) :
-        m_items(items)
+        m_items(items.data()), m_size(items.size())
+    {
+    }
+
+    constexpr explicit bytes(std::span<Item> items, std::size_t size) :
+        m_items(items.data()), m_size(size)
     {
     }
 
     constexpr auto data() const
     {
-        return m_items.data();
+        return m_items;
     }
 
     constexpr std::size_t size_in_bytes() const
     {
-        return m_items.size() * sizeof(Item);
+        return m_size * sizeof(Item);
     }
 
     constexpr std::size_t count() const
     {
-        return m_items.size();
+        return m_size;
     }
 
 private:
     static_assert(std::is_trivially_copyable_v<Item>);
 
-    std::span<Item> m_items;
+    Item * m_items;
+    std::size_t m_size;
 };
 
 template <typename Item>
 bytes(std::span<Item>) -> bytes<Item>;
+
+template <typename Item>
+bytes(std::span<Item>, std::size_t) -> bytes<Item>;
 
 template <typename Item, std::size_t Count>
 bytes(Item(&)[Count]) -> bytes<Item>;
 
 template <concepts::container Container>
 bytes(Container && container)
+    -> bytes<std::remove_reference_t<decltype(container[0])>>;
+
+template <concepts::container Container>
+bytes(Container && container, std::size_t)
     -> bytes<std::remove_reference_t<decltype(container[0])>>;
 
 constexpr auto as_bytes(auto && object)
@@ -2075,25 +2088,6 @@ protected:
         using type = std::remove_cvref_t<decltype(container)>;
         using value_type = typename type::value_type;
 
-        if constexpr (!std::is_void_v<SizeType> &&
-                      (
-                          concepts::associative_container<
-                              decltype(container)> ||
-                          requires(type container) {
-                              container.resize(1);
-                          } ||
-                          (requires (type container) {
-                              container = {container.data(), 1};
-                          } && !requires {
-                              requires (type::extent != std::dynamic_extent);
-                              requires std::integral_constant<std::size_t, type{}.size()>::value;
-                          }))) {
-            if (auto result =
-                    serialize_one(static_cast<SizeType>(container.size()));
-                failure(result)) [[unlikely]] {
-                return result;
-            }
-        }
 
         if constexpr (concepts::serialize_as_bytes<decltype(*this),
                                                    value_type> &&
@@ -2102,8 +2096,55 @@ protected:
                                             typename type::iterator>::
                                             iterator_category> &&
                       requires { container.data(); }) {
-            return serialize_one(bytes(container));
+            auto size = container.size();
+            if constexpr (!std::is_void_v<SizeType> &&
+                          (concepts::associative_container<
+                               decltype(container)> ||
+                           requires(type container) {
+                               container.resize(1);
+                           } ||
+                           (
+                               requires(type container) {
+                                   container = {container.data(), 1};
+                               } &&
+                               !requires {
+                                   requires(type::extent !=
+                                            std::dynamic_extent);
+                                   requires std::integral_constant<
+                                       std::size_t,
+                                       type{}.size()>::value;
+                               }))) {
+                if (auto result =
+                        serialize_one(static_cast<SizeType>(size));
+                    failure(result)) [[unlikely]] {
+                    return result;
+                }
+            }
+            return serialize_one(bytes(container, size));
         } else {
+            if constexpr (!std::is_void_v<SizeType> &&
+                          (concepts::associative_container<
+                               decltype(container)> ||
+                           requires(type container) {
+                               container.resize(1);
+                           } ||
+                           (
+                               requires(type container) {
+                                   container = {container.data(), 1};
+                               } &&
+                               !requires {
+                                   requires(type::extent !=
+                                            std::dynamic_extent);
+                                   requires std::integral_constant<
+                                       std::size_t,
+                                       type{}.size()>::value;
+                               }))) {
+                if (auto result = serialize_one(
+                        static_cast<SizeType>(container.size()));
+                    failure(result)) [[unlikely]] {
+                    return result;
+                }
+            }
             for (auto & item : container) {
                 if (auto result = serialize_one(item); failure(result))
                     [[unlikely]] {
@@ -2638,6 +2679,24 @@ private:
                     return std::errc::result_out_of_range;
                 }
                 container = {container.data(), size};
+            }
+
+            if constexpr (
+                concepts::serialize_as_bytes<decltype(*this),
+                                             value_type> &&
+                std::is_base_of_v<
+                    std::random_access_iterator_tag,
+                    typename std::iterator_traits<
+                        typename type::iterator>::iterator_category> &&
+                requires { container.data(); } &&
+                !(is_const &&
+                  (std::same_as<std::byte, value_type> ||
+                   std::same_as<char, value_type> ||
+                   std::same_as<unsigned char,
+                                value_type>)&&requires(type container) {
+                      container = {m_data.data(), 1};
+                  })) {
+                return serialize_one(bytes(container, size));
             }
         }
 
