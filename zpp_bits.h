@@ -162,7 +162,6 @@ constexpr auto failure(errc code)
     return std::errc{} != code;
 }
 
-
 struct access
 {
     struct any
@@ -356,6 +355,20 @@ struct access
         }
     }
 };
+
+template <typename Type>
+struct destructor_guard
+{
+    constexpr ZPP_BITS_INLINE ~destructor_guard()
+    {
+        access::destruct(object);
+    }
+
+    Type & object;
+};
+
+template <typename Type>
+destructor_guard(Type) -> destructor_guard<Type>;
 
 namespace traits
 {
@@ -2768,11 +2781,6 @@ private:
 
         container.clear();
 
-        constexpr auto destructor = [](auto pointer)
-                                        ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
-                                            access::destruct(*pointer);
-                                        };
-
         for (std::size_t index{}; index < size; ++index)
         {
             if constexpr (requires { typename type::mapped_type; }) {
@@ -2782,10 +2790,11 @@ private:
                                        alignof(value_type)>
                     storage;
 
-                std::unique_ptr<value_type, decltype(destructor)> object(
-                    access::placement_new<value_type>(std::addressof(storage)));
-                if (auto result = serialize_one(*object);
-                    failure(result)) [[unlikely]] {
+                auto object = access::placement_new<value_type>(
+                    std::addressof(storage));
+                destructor_guard guard{*object};
+                if (auto result = serialize_one(*object); failure(result))
+                    [[unlikely]] {
                     return result;
                 }
 
@@ -2797,10 +2806,11 @@ private:
                                        alignof(value_type)>
                     storage;
 
-                std::unique_ptr<value_type, decltype(destructor)> object(
-                    access::placement_new<value_type>(std::addressof(storage)));
-                if (auto result = serialize_one(*object);
-                    failure(result)) [[unlikely]] {
+                auto object = access::placement_new<value_type>(
+                    std::addressof(storage));
+                destructor_guard guard{*object};
+                if (auto result = serialize_one(*object); failure(result))
+                    [[unlikely]] {
                     return result;
                 }
 
@@ -2855,14 +2865,9 @@ private:
             std::aligned_storage_t<sizeof(value_type), alignof(value_type)>
                 storage;
 
-            constexpr auto destructor =
-                [](auto pointer) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
-                    access::destruct(*pointer);
-                };
-
-            std::unique_ptr<value_type, decltype(destructor)> object(
-                access::placement_new<value_type>(
-                    std::addressof(storage)));
+            auto object =
+                access::placement_new<value_type>(std::addressof(storage));
+            destructor_guard guard{*object};
 
             if (auto result = serialize_one(*object); failure(result))
                 [[unlikely]] {
@@ -2905,14 +2910,9 @@ private:
                                        alignof(element_type)>
                     storage;
 
-                constexpr auto destructor =
-                    [](auto pointer) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
-                        access::destruct(*pointer);
-                    };
-
-                std::unique_ptr<element_type, decltype(destructor)> object(
-                    access::placement_new<element_type>(
-                        std::addressof(storage)));
+                auto object = access::placement_new<element_type>(
+                    std::addressof(storage));
+                destructor_guard guard{*object};
 
                 if (auto result = serialize_one(*object); failure(result))
                     [[unlikely]] {
@@ -2958,14 +2958,9 @@ private:
                     std::aligned_storage_t<sizeof(Types), alignof(Types)>
                         storage;
 
-                    constexpr auto destructor =
-                        [](auto pointer) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
-                            access::destruct(*pointer);
-                        };
-
-                    std::unique_ptr<Types, decltype(destructor)> object(
-                        access::placement_new<Types>(
-                            std::addressof(storage)));
+                    auto object = access::placement_new<Types>(
+                        std::addressof(storage));
+                    destructor_guard guard{*object};
 
                     if (auto result = self.serialize_one(*object);
                         failure(result)) [[unlikely]] {
@@ -4955,11 +4950,6 @@ struct pb
         using archive_type = std::remove_reference_t<decltype(archive)>;
         static_assert(check_type<type>());
 
-        constexpr auto destructor = [](auto pointer)
-                                        ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
-                                            access::destruct(*pointer);
-                                        };
-
         if constexpr (std::is_enum_v<type>) {
             varint<type> value;
             if (auto result = archive(value); failure(result))
@@ -5002,10 +4992,11 @@ struct pb
                                    alignof(value_type)>
                 storage;
 
-            std::unique_ptr<value_type, decltype(destructor)> object(
-                access::placement_new<value_type>(std::addressof(storage)));
-            if (auto result = archive(*object);
-                failure(result)) [[unlikely]] {
+            auto object =
+                access::placement_new<value_type>(std::addressof(storage));
+            destructor_guard guard{*object};
+            if (auto result = archive(*object); failure(result))
+                [[unlikely]] {
                 return result;
             }
 
@@ -5083,9 +5074,9 @@ struct pb
                                        alignof(value_type)>
                     storage;
 
-                std::unique_ptr<value_type, decltype(destructor)> object(
-                    access::placement_new<value_type>(
-                        std::addressof(storage)));
+                auto object = access::placement_new<value_type>(
+                    std::addressof(storage));
+                destructor_guard guard{*object};
                 if (auto result = archive(*object); failure(result))
                     [[unlikely]] {
                     return result;
