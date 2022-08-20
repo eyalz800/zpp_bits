@@ -2768,10 +2768,10 @@ private:
 
         container.clear();
 
-        constexpr auto destructor = [](auto pointer) constexpr
-        {
-            access::destruct(*pointer);
-        };
+        constexpr auto destructor = [](auto pointer)
+                                        ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                                            access::destruct(*pointer);
+                                        };
 
         for (std::size_t index{}; index < size; ++index)
         {
@@ -2855,10 +2855,10 @@ private:
             std::aligned_storage_t<sizeof(value_type), alignof(value_type)>
                 storage;
 
-            constexpr auto destructor = [](auto pointer) constexpr
-            {
-                access::destruct(*pointer);
-            };
+            constexpr auto destructor =
+                [](auto pointer) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                    access::destruct(*pointer);
+                };
 
             std::unique_ptr<value_type, decltype(destructor)> object(
                 access::placement_new<value_type>(
@@ -2905,10 +2905,10 @@ private:
                                        alignof(element_type)>
                     storage;
 
-                constexpr auto destructor = [](auto pointer) constexpr
-                {
-                    access::destruct(*pointer);
-                };
+                constexpr auto destructor =
+                    [](auto pointer) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                        access::destruct(*pointer);
+                    };
 
                 std::unique_ptr<element_type, decltype(destructor)> object(
                     access::placement_new<element_type>(
@@ -2958,10 +2958,10 @@ private:
                     std::aligned_storage_t<sizeof(Types), alignof(Types)>
                         storage;
 
-                    constexpr auto destructor = [](auto pointer) constexpr
-                    {
-                        access::destruct(*pointer);
-                    };
+                    constexpr auto destructor =
+                        [](auto pointer) ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                            access::destruct(*pointer);
+                        };
 
                     std::unique_ptr<Types, decltype(destructor)> object(
                         access::placement_new<Types>(
@@ -4955,10 +4955,10 @@ struct pb
         using archive_type = std::remove_reference_t<decltype(archive)>;
         static_assert(check_type<type>());
 
-        constexpr auto destructor = [](auto pointer) constexpr
-        {
-            access::destruct(*pointer);
-        };
+        constexpr auto destructor = [](auto pointer)
+                                        ZPP_BITS_CONSTEXPR_INLINE_LAMBDA {
+                                            access::destruct(*pointer);
+                                        };
 
         if constexpr (std::is_enum_v<type>) {
             varint<type> value;
