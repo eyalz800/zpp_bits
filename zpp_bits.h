@@ -4727,7 +4727,7 @@ struct pb
                              !std::same_as<type, std::byte>) {
             constexpr auto tag = make_tag<tag_type, Index>();
             if (auto result = archive(
-                    tag, varint{std::underlying_type_t<type>{item}});
+                    tag, varint{std::underlying_type_t<type>(item)});
                 failure(result)) [[unlikely]] {
                 return result;
             }
