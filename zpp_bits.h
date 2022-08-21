@@ -44,8 +44,8 @@
 #define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr __attribute__((always_inline))
 #endif
 #elif defined _MSC_VER
-#define ZPP_BITS_INLINE __forceinline
-#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
+#define ZPP_BITS_INLINE [[msvc::forceinline]]
+#define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA /*constexpr*/ [[msvc::forceinline]]
 #endif
 #else // ZPP_BITS_INLINE
 #define ZPP_BITS_CONSTEXPR_INLINE_LAMBDA constexpr
@@ -202,7 +202,7 @@ struct access
 
     constexpr static auto max_visit_members = 50;
 
-    constexpr static decltype(auto) ZPP_BITS_INLINE visit_members(
+    ZPP_BITS_INLINE constexpr static decltype(auto) visit_members(
         auto && object,
         auto && visitor) requires(0 <=
                                   number_of_members<decltype(object)>()) &&
@@ -359,7 +359,7 @@ struct access
 template <typename Type>
 struct destructor_guard
 {
-    constexpr ZPP_BITS_INLINE ~destructor_guard()
+    ZPP_BITS_INLINE constexpr ~destructor_guard()
     {
         access::destruct(object);
     }
@@ -439,7 +439,7 @@ struct variant_impl<Variant<Types...>>
     }
 
     template <std::size_t CurrentIndex = 0>
-    constexpr static auto ZPP_BITS_INLINE id(auto index)
+    ZPP_BITS_INLINE constexpr static auto id(auto index)
     {
         if constexpr (CurrentIndex == (sizeof...(Types) - 1)) {
             return id<CurrentIndex>();
@@ -465,7 +465,7 @@ struct variant_impl<Variant<Types...>>
     }
 
     template <std::size_t CurrentIndex = 0>
-    constexpr static std::size_t ZPP_BITS_INLINE index(auto && id)
+    ZPP_BITS_INLINE constexpr static std::size_t index(auto && id)
     {
         if constexpr (CurrentIndex == sizeof...(Types)) {
             return std::numeric_limits<std::size_t>::max();
@@ -553,7 +553,7 @@ template <typename... Types, template <typename...> typename Tuple>
 struct tuple<Tuple<Types...>>
 {
     template <std::size_t Index = 0>
-    constexpr static auto ZPP_BITS_INLINE visit(auto && tuple, auto && index, auto && visitor)
+    ZPP_BITS_INLINE constexpr static auto visit(auto && tuple, auto && index, auto && visitor)
     {
         if constexpr (Index + 1 == sizeof...(Types)) {
             return visitor(std::get<Index>(tuple));
@@ -1372,7 +1372,7 @@ constexpr static auto number_of_members()
     return access::number_of_members<Type>();
 }
 
-constexpr decltype(auto) ZPP_BITS_INLINE visit_members(auto && object,
+ZPP_BITS_INLINE constexpr decltype(auto) visit_members(auto && object,
                                                        auto && visitor)
 {
     return access::visit_members(object, visitor);
@@ -1401,7 +1401,7 @@ template <typename Type, typename...>
 optional_ptr(Type *) -> optional_ptr<Type>;
 
 template <typename Archive, typename Type>
-constexpr static auto ZPP_BITS_INLINE serialize(
+ZPP_BITS_INLINE constexpr static auto serialize(
     Archive & archive,
     const optional_ptr<Type> & self) requires(Archive::kind() == kind::out)
 {
@@ -1413,7 +1413,7 @@ constexpr static auto ZPP_BITS_INLINE serialize(
 }
 
 template <typename Archive, typename Type>
-constexpr static auto ZPP_BITS_INLINE
+ZPP_BITS_INLINE constexpr static auto
 serialize(Archive & archive,
           optional_ptr<Type> & self) requires(Archive::kind() == kind::in)
 {
@@ -1454,7 +1454,7 @@ struct sized_item : public Type
     {
     }
 
-    constexpr static auto ZPP_BITS_INLINE serialize(auto & archive,
+    ZPP_BITS_INLINE constexpr static auto serialize(auto & archive,
                                                     auto & self)
     {
         if constexpr (std::remove_cvref_t<decltype(archive)>::kind() == kind::out) {
@@ -1485,7 +1485,7 @@ struct sized_item_ref
     {
     }
 
-    constexpr static auto ZPP_BITS_INLINE serialize(auto & serializer,
+    ZPP_BITS_INLINE constexpr static auto serialize(auto & serializer,
                                                     auto & self)
     {
         return serializer.template serialize_one<SizeType>(self.value);
@@ -1565,7 +1565,7 @@ constexpr auto varint_max_size = sizeof(Type) * CHAR_BIT / (CHAR_BIT - 1) +
                                  1;
 
 template <varint_encoding Encoding = varint_encoding::normal>
-constexpr auto ZPP_BITS_INLINE varint_size(auto value)
+ZPP_BITS_INLINE constexpr auto varint_size(auto value)
 {
     if constexpr (Encoding == varint_encoding::zig_zag) {
         return varint_size(std::make_unsigned_t<decltype(value)>((value << 1) ^
@@ -1580,7 +1580,7 @@ constexpr auto ZPP_BITS_INLINE varint_size(auto value)
 }
 
 template <typename Archive, typename Type, varint_encoding Encoding>
-constexpr auto ZPP_BITS_INLINE serialize(
+ZPP_BITS_INLINE constexpr auto serialize(
     Archive & archive,
     varint<Type, Encoding> self) requires(Archive::kind() == kind::out)
 {
@@ -1666,7 +1666,7 @@ constexpr auto decode_varint(auto data, auto & value, auto & position)
 }
 
 template <typename Archive, typename Type, varint_encoding Encoding>
-constexpr auto ZPP_BITS_INLINE serialize(
+ZPP_BITS_INLINE constexpr auto serialize(
     Archive & archive,
     varint<Type, Encoding> & self) requires(Archive::kind() == kind::in)
 {
@@ -1845,7 +1845,7 @@ public:
         (options(*this), ...);
     }
 
-    constexpr auto ZPP_BITS_INLINE operator()(auto &&... items)
+    ZPP_BITS_INLINE constexpr auto operator()(auto &&... items)
     {
         return serialize_many(items...);
     }
@@ -1886,7 +1886,7 @@ public:
         return kind::out;
     }
 
-    constexpr errc ZPP_BITS_INLINE enlarge_for(auto additional_size)
+    ZPP_BITS_INLINE constexpr errc enlarge_for(auto additional_size)
     {
         auto size = m_data.size();
         if (additional_size > size - m_position) [[unlikely]] {
@@ -1925,7 +1925,7 @@ public:
     }
 
 protected:
-    constexpr errc ZPP_BITS_INLINE serialize_many(auto && first_item,
+    ZPP_BITS_INLINE constexpr errc serialize_many(auto && first_item,
                                                   auto &&... items)
     {
         if (auto result = serialize_one(first_item); failure(result))
@@ -1936,7 +1936,7 @@ protected:
         return serialize_many(items...);
     }
 
-    constexpr errc ZPP_BITS_INLINE serialize_many()
+    ZPP_BITS_INLINE constexpr errc serialize_many()
     {
         return {};
     }
@@ -1962,7 +1962,7 @@ protected:
         }
     }
 
-    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::unspecialized auto && item)
+    ZPP_BITS_INLINE constexpr errc serialize_one(concepts::unspecialized auto && item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
         static_assert(!std::is_pointer_v<type>);
@@ -2079,7 +2079,7 @@ protected:
     }
 
     template <typename SizeType = default_size_type>
-    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::array auto && array)
+    ZPP_BITS_INLINE constexpr errc serialize_one(concepts::array auto && array)
     {
         using value_type = std::remove_cvref_t<decltype(array[0])>;
 
@@ -2098,7 +2098,7 @@ protected:
     }
 
     template <typename SizeType = default_size_type>
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::container auto && container)
     {
         using type = std::remove_cvref_t<decltype(container)>;
@@ -2171,7 +2171,7 @@ protected:
         }
     }
 
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::tuple auto && tuple)
     {
         return serialize_one(tuple,
@@ -2180,13 +2180,13 @@ protected:
     }
 
     template <std::size_t... Indices>
-    constexpr errc ZPP_BITS_INLINE serialize_one(
+    ZPP_BITS_INLINE constexpr errc serialize_one(
         concepts::tuple auto && tuple, std::index_sequence<Indices...>)
     {
         return serialize_many(std::get<Indices>(tuple)...);
     }
 
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::optional auto && optional)
     {
         if (!optional) [[unlikely]] {
@@ -2197,7 +2197,7 @@ protected:
     }
 
     template <typename KnownId = void>
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::variant auto && variant)
     {
         using type = std::remove_cvref_t<decltype(variant)>;
@@ -2223,7 +2223,7 @@ protected:
         }
     }
 
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::owning_pointer auto && pointer)
     {
         if (nullptr == pointer) [[unlikely]] {
@@ -2233,7 +2233,7 @@ protected:
         return serialize_one(*pointer);
     }
 
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::bitset auto && bitset)
     {
         constexpr auto size = std::remove_cvref_t<decltype(bitset)>{}.size();
@@ -2261,7 +2261,7 @@ protected:
     }
 
     template <typename SizeType = default_size_type>
-    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::by_protocol auto && item)
+    ZPP_BITS_INLINE constexpr errc serialize_one(concepts::by_protocol auto && item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
         if constexpr (!std::is_void_v<SizeType>) {
@@ -2362,7 +2362,7 @@ public:
         (... ||
          std::same_as<std::remove_cvref_t<Options>, options::no_fit_size>);
 
-    constexpr auto ZPP_BITS_INLINE operator()(auto &&... items)
+    ZPP_BITS_INLINE constexpr auto operator()(auto &&... items)
     {
         if constexpr (resizable && !no_fit_size &&
                       enlarger != std::tuple{1, 1}) {
@@ -2451,7 +2451,7 @@ public:
         (options(*this), ...);
     }
 
-    constexpr auto ZPP_BITS_INLINE operator()(auto &&... items)
+    ZPP_BITS_INLINE constexpr auto operator()(auto &&... items)
     {
         return serialize_many(items...);
     }
@@ -2504,7 +2504,7 @@ public:
                                std::span{std::declval<ByteView &>()})>>;
 
 private:
-    constexpr errc ZPP_BITS_INLINE serialize_many(auto && first_item,
+    ZPP_BITS_INLINE constexpr errc serialize_many(auto && first_item,
                                                   auto &&... items)
     {
         if (auto result = serialize_one(first_item); failure(result))
@@ -2515,12 +2515,12 @@ private:
         return serialize_many(items...);
     }
 
-    constexpr errc ZPP_BITS_INLINE serialize_many()
+    ZPP_BITS_INLINE constexpr errc serialize_many()
     {
         return {};
     }
 
-    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::unspecialized auto && item)
+    ZPP_BITS_INLINE constexpr errc serialize_one(concepts::unspecialized auto && item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
         static_assert(!std::is_pointer_v<type>);
@@ -2622,7 +2622,7 @@ private:
     }
 
     template <typename SizeType = default_size_type>
-    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::array auto && array)
+    ZPP_BITS_INLINE constexpr errc serialize_one(concepts::array auto && array)
     {
         using value_type = std::remove_cvref_t<decltype(array[0])>;
 
@@ -2641,7 +2641,7 @@ private:
     }
 
     template <typename SizeType = default_size_type>
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::container auto && container)
     {
         using type = std::remove_cvref_t<decltype(container)>;
@@ -2766,7 +2766,7 @@ private:
     }
 
     template <typename SizeType = default_size_type>
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::associative_container auto && container)
     {
         using type = typename std::remove_cvref_t<decltype(container)>;
@@ -2824,7 +2824,7 @@ private:
         return {};
     }
 
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::tuple auto && tuple)
     {
         return serialize_one(tuple,
@@ -2833,13 +2833,13 @@ private:
     }
 
     template <std::size_t... Indices>
-    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::tuple auto && tuple,
-                                 std::index_sequence<Indices...>)
+    ZPP_BITS_INLINE constexpr errc serialize_one(
+        concepts::tuple auto && tuple, std::index_sequence<Indices...>)
     {
         return serialize_many(std::get<Indices>(tuple)...);
     }
 
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::optional auto && optional)
     {
         using value_type = std::remove_reference_t<decltype(*optional)>;
@@ -2887,7 +2887,7 @@ private:
               typename... Types,
               template <typename...>
               typename Variant>
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(Variant<Types...> & variant) requires
         concepts::variant<Variant<Types...>>
     {
@@ -2935,7 +2935,7 @@ private:
     }
 
     template <typename... Types, template <typename...> typename Variant>
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(Variant<Types...> & variant,
                   auto && id) requires concepts::variant<Variant<Types...>>
     {
@@ -2979,7 +2979,7 @@ private:
             });
     }
 
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::owning_pointer auto && pointer)
     {
         using type = std::remove_reference_t<decltype(*pointer)>;
@@ -2994,7 +2994,7 @@ private:
         return {};
     }
 
-    constexpr errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::bitset auto && bitset)
     {
         constexpr auto size = std::remove_cvref_t<decltype(bitset)>{}.size();
@@ -3017,7 +3017,7 @@ private:
     }
 
     template <typename SizeType = default_size_type>
-    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::by_protocol auto && item)
+    ZPP_BITS_INLINE constexpr errc serialize_one(concepts::by_protocol auto && item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
         if constexpr (!std::is_void_v<SizeType>) {
@@ -3235,7 +3235,7 @@ struct known_id_variant
     {
     }
 
-    constexpr static auto ZPP_BITS_INLINE serialize(auto & serializer,
+    ZPP_BITS_INLINE constexpr static auto serialize(auto & serializer,
                                                     auto & self)
     {
         return serializer.template serialize_one<Id>(self.variant);
@@ -3266,7 +3266,7 @@ struct known_dynamic_id_variant
     {
     }
 
-    constexpr static auto ZPP_BITS_INLINE serialize(auto & serializer,
+    ZPP_BITS_INLINE constexpr static auto serialize(auto & serializer,
                                                     auto & self)
     {
         return serializer.template serialize_one(self.variant, self.id);
@@ -3545,7 +3545,7 @@ struct [[nodiscard]] value_or_errc
     bool m_failure{};
 };
 
-constexpr auto ZPP_BITS_INLINE
+ZPP_BITS_INLINE constexpr auto
 apply(auto && function, auto && archive) requires(
     std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
 {
@@ -3606,7 +3606,7 @@ apply(auto && function, auto && archive) requires(
     }
 }
 
-constexpr auto ZPP_BITS_INLINE
+ZPP_BITS_INLINE constexpr auto
 apply(auto && self, auto && function, auto && archive) requires(
     std::remove_cvref_t<decltype(archive)>::kind() == kind::in)
 {
@@ -3675,7 +3675,7 @@ struct bind
         typename function_traits<function_type>::return_type;
     static constexpr auto opaque = false;
 
-    constexpr static decltype(auto) ZPP_BITS_INLINE call(auto && archive,
+    ZPP_BITS_INLINE constexpr static decltype(auto) call(auto && archive,
                                                          auto && context)
     {
         if constexpr (std::is_member_function_pointer_v<
@@ -3698,7 +3698,7 @@ struct bind_opaque
         typename function_traits<function_type>::return_type;
     static constexpr auto opaque = true;
 
-    constexpr static decltype(auto) ZPP_BITS_INLINE call(auto && in,
+    ZPP_BITS_INLINE constexpr static decltype(auto) call(auto && in,
                                                          auto && out,
                                                          auto && context)
     {
@@ -3980,7 +3980,7 @@ struct rpc_impl
         }
 
         template <typename FirstBinding, typename... OtherBindings>
-        constexpr auto ZPP_BITS_INLINE
+        ZPP_BITS_INLINE constexpr auto
         call_binding(auto & id) requires(!FirstBinding::opaque)
         {
             if (FirstBinding::id::value == id) {
@@ -4018,7 +4018,7 @@ struct rpc_impl
         }
 
         template <typename FirstBinding, typename... OtherBindings>
-        constexpr auto ZPP_BITS_INLINE
+        ZPP_BITS_INLINE constexpr auto
         call_binding(auto & id) requires FirstBinding::opaque
         {
             if (FirstBinding::id::value == id) {
@@ -4612,7 +4612,7 @@ struct pb
         return make_tag_explicit(WireType, field_number<Type, Index>());
     }
 
-    constexpr auto ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr auto
     operator()(auto & archive, auto & item) const requires(
         std::remove_cvref_t<decltype(archive)>::kind() == kind::out)
     {
@@ -4684,7 +4684,7 @@ struct pb
     }
 
     template <std::size_t FirstIndex, std::size_t... Indices>
-    constexpr static auto ZPP_BITS_INLINE serialize_many(
+    ZPP_BITS_INLINE constexpr static auto serialize_many(
         std::index_sequence<FirstIndex, Indices...>,
         auto & archive,
         auto & first_item,
@@ -4700,7 +4700,7 @@ struct pb
             std::index_sequence<Indices...>{}, archive, items...);
     }
 
-    constexpr static errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr static errc
     serialize_many(std::index_sequence<>, auto & archive) requires(
         std::remove_cvref_t<decltype(archive)>::kind() == kind::out)
     {
@@ -4708,7 +4708,7 @@ struct pb
     }
 
     template <std::size_t Index, typename TagType = void>
-    constexpr static errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr static errc
     serialize_one(auto & archive, auto & item) requires(
         std::remove_cvref_t<decltype(archive)>::kind() == kind::out)
     {
@@ -4849,7 +4849,7 @@ struct pb
         }
     }
 
-    constexpr errc ZPP_BITS_INLINE operator()(
+    ZPP_BITS_INLINE constexpr errc operator()(
         auto & archive,
         auto & item,
         std::size_t size = std::numeric_limits<std::size_t>::max()) const
@@ -4867,7 +4867,7 @@ struct pb
         return result;
     }
 
-    constexpr static errc ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr static errc
     deserialize_fields(auto & archive, auto & item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
@@ -4906,7 +4906,7 @@ struct pb
     }
 
     template <std::size_t Index = 0>
-    constexpr static auto ZPP_BITS_INLINE
+    ZPP_BITS_INLINE constexpr static auto
     deserialize_field(auto & archive,
                       auto && item,
                       auto field_num,
@@ -4946,7 +4946,7 @@ struct pb
         }
     }
 
-    constexpr static auto ZPP_BITS_INLINE deserialize_field(
+    ZPP_BITS_INLINE constexpr static auto deserialize_field(
         auto & archive, wire_type field_type, auto & item)
     {
         using type = std::remove_reference_t<decltype(item)>;
