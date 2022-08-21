@@ -813,6 +813,9 @@ template <typename Type>
 concept by_protocol = has_protocol<Type> && !has_explicit_serialize<Type>;
 
 template <typename Type>
+concept array = std::is_array_v<std::remove_cvref_t<Type>>;
+
+template <typename Type>
 concept unspecialized =
     !container<Type> && !owning_pointer<Type> && !tuple<Type> &&
     !variant<Type> && !optional<Type> && !bitset<Type> &&
@@ -2075,8 +2078,8 @@ protected:
         }
     }
 
-    template <typename SizeType = default_size_type, std::size_t Count = 0>
-    constexpr errc ZPP_BITS_INLINE serialize_one(auto (&array)[Count])
+    template <typename SizeType = default_size_type>
+    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::array auto && array)
     {
         using value_type = std::remove_cvref_t<decltype(array[0])>;
 
@@ -2618,8 +2621,8 @@ private:
         }
     }
 
-    template <typename SizeType = default_size_type, std::size_t Count = 0>
-    constexpr errc ZPP_BITS_INLINE serialize_one(auto (&array)[Count])
+    template <typename SizeType = default_size_type>
+    constexpr errc ZPP_BITS_INLINE serialize_one(concepts::array auto && array)
     {
         using value_type = std::remove_cvref_t<decltype(array[0])>;
 
