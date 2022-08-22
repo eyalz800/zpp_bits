@@ -2123,12 +2123,12 @@ protected:
                                requires(type container) {
                                    container = {container.data(), 1};
                                } &&
-                               !requires {
+                               !requires (type value) {
                                    requires(type::extent !=
                                             std::dynamic_extent);
                                    requires std::integral_constant<
                                        std::size_t,
-                                       type{}.size()>::value;
+                                       decltype(value){}.size()>::value;
                                }))) {
                 if (auto result =
                         serialize_one(static_cast<SizeType>(size));
@@ -2148,12 +2148,12 @@ protected:
                                requires(type container) {
                                    container = {container.data(), 1};
                                } &&
-                               !requires {
+                               !requires (type value) {
                                    requires(type::extent !=
                                             std::dynamic_extent);
                                    requires std::integral_constant<
                                        std::size_t,
-                                       type{}.size()>::value;
+                                       decltype(value){}.size()>::value;
                                }))) {
                 if (auto result = serialize_one(
                         static_cast<SizeType>(container.size()));
@@ -2655,12 +2655,12 @@ private:
                            requires(type container) {
                                container = {container.data(), 1};
                            } &&
-                           !requires {
+                           !requires (type value) {
                                requires(type::extent !=
                                         std::dynamic_extent);
                                requires std::integral_constant<
                                    std::size_t,
-                                   type{}.size()>::value;
+                                   decltype(value){}.size()>::value;
                            }))) {
             SizeType size{};
             if (auto result = serialize_one(size); failure(result))
