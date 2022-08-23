@@ -880,6 +880,13 @@ concept type_references = requires
 template <typename Type>
 concept self_referencing = access::self_referencing<Type>();
 
+template <typename Type>
+concept has_fixed_nonzero_size = requires
+{
+    requires std::integral_constant<std::size_t,
+        std::remove_cvref_t<Type>{}.size()>::value != 0;
+};
+
 } // namespace concepts
 
 template <typename CharType, std::size_t Size>
@@ -1123,11 +1130,8 @@ constexpr auto access::number_of_members()
         return std::extent_v<type>;
     } else if constexpr (!std::is_class_v<type>) {
         return 0;
-    } else if constexpr (concepts::container<type> && requires {
-                             requires std::integral_constant<
-                                 std::size_t,
-                                 type{}.size()>::value != 0;
-                         }) {
+    } else if constexpr (concepts::container<type> &&
+                         concepts::has_fixed_nonzero_size<type>) {
         return type{}.size();
     } else if constexpr (concepts::tuple<type>) {
         return std::tuple_size_v<type>;
@@ -2126,9 +2130,8 @@ protected:
                                !requires {
                                    requires(type::extent !=
                                             std::dynamic_extent);
-                                   requires std::integral_constant<
-                                       std::size_t,
-                                       type{}.size()>::value;
+                                   requires concepts::
+                                       has_fixed_nonzero_size<type>;
                                }))) {
                 if (auto result =
                         serialize_one(static_cast<SizeType>(size));
@@ -2151,9 +2154,8 @@ protected:
                                !requires {
                                    requires(type::extent !=
                                             std::dynamic_extent);
-                                   requires std::integral_constant<
-                                       std::size_t,
-                                       type{}.size()>::value;
+                                   requires concepts::
+                                       has_fixed_nonzero_size<type>;
                                }))) {
                 if (auto result = serialize_one(
                         static_cast<SizeType>(container.size()));
@@ -2658,9 +2660,8 @@ private:
                            !requires {
                                requires(type::extent !=
                                         std::dynamic_extent);
-                               requires std::integral_constant<
-                                   std::size_t,
-                                   type{}.size()>::value;
+                               requires concepts::has_fixed_nonzero_size<
+                                   type>;
                            }))) {
             SizeType size{};
             if (auto result = serialize_one(size); failure(result))
@@ -2734,9 +2735,7 @@ private:
                 if constexpr (requires {
                                   requires(type::extent !=
                                            std::dynamic_extent);
-                                  requires std::integral_constant<
-                                      std::size_t,
-                                      type{}.size()>::value;
+                                  requires concepts::has_fixed_nonzero_size<type>;
                               }) {
                     if (type::extent > m_data.size() - m_position)
                         [[unlikely]] {
