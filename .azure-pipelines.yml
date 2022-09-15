@@ -31,13 +31,6 @@ strategy:
     #   GCC_VERSION: '11'
     #   ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
     #   TEST_AUTODETECT: 0
-    macOS-10.15:
-      VM_IMAGE: 'macOS-10.15'
-      OPERATING_SYSTEM: 'mac-os'
-      COMPILER: 'clang'
-      CLANG_VERSION: '13'
-      ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
-      TEST_AUTODETECT: 1
     macOS-11:
       VM_IMAGE: 'macOS-11'
       OPERATING_SYSTEM: 'mac-os'
