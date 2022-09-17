@@ -783,7 +783,6 @@ concept associative_container = container<Type> && requires(Type container)
 template <typename Type>
 concept tuple = !has_serialize<Type> && !container<Type> && requires(Type tuple)
 {
-    std::get<0>(tuple);
     sizeof(std::tuple_size<std::remove_cvref_t<Type>>);
 }
 &&!requires(Type tuple)
