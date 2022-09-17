@@ -1370,7 +1370,7 @@ constexpr auto access::self_referencing()
 }
 
 template <typename Type>
-constexpr static auto number_of_members()
+constexpr auto number_of_members()
 {
     return access::number_of_members<Type>();
 }
