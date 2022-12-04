@@ -2784,7 +2784,7 @@ private:
 
         for (std::size_t index{}; index < size; ++index)
         {
-            if constexpr (requires { typename type::mapped_type; }) {
+            if constexpr (requires { requires !std::is_void_v<typename type::mapped_type>; } ) {
                 using value_type = std::pair<typename type::key_type,
                                              typename type::mapped_type>;
                 std::aligned_storage_t<sizeof(value_type),
@@ -4967,7 +4967,7 @@ struct pb
         } else if constexpr (!concepts::container<type>) {
             return archive(item);
         } else if constexpr (concepts::associative_container<type> &&
-                             requires { typename type::mapped_type; }) {
+                             requires { requires !std::is_void_v<typename type::mapped_type>; }) {
             using key_type = std::conditional_t<
                 std::is_enum_v<typename type::key_type> &&
                     !std::same_as<typename type::key_type, std::byte>,
