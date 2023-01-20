@@ -233,46 +233,51 @@ struct access
         // clang-format on
     }
 
+    constexpr static auto try_serialize(auto && item)
+    {
+        if constexpr (requires { serialize(item); }) {
+            return serialize(item);
+        }
+    }
+
     template <typename Type, typename Archive>
     constexpr static auto has_serialize()
     {
-        return requires
-        {
-            requires std::same_as<
-                typename std::remove_cvref_t<Type>::serialize,
-                members<std::remove_cvref_t<Type>::serialize::value>>;
-        }
-        || requires(Type && item)
-        {
-            requires std::same_as<
-                std::remove_cvref_t<decltype(serialize(item))>,
-                members<std::remove_cvref_t<decltype(serialize(
-                    item))>::value>>;
-        }
-        || requires
-        {
-            requires std::same_as<
-                typename std::remove_cvref_t<Type>::serialize,
-                protocol<std::remove_cvref_t<Type>::serialize::value,
-                         std::remove_cvref_t<Type>::serialize::members>>;
-        }
-        || requires(Type && item)
-        {
-            requires std::same_as<
-                std::remove_cvref_t<decltype(serialize(item))>,
-                protocol<
-                    std::remove_cvref_t<decltype(serialize(item))>::value,
-                    std::remove_cvref_t<decltype(serialize(
-                        item))>::members>>;
-        }
-        || requires(Type && item, Archive && archive)
-        {
-            std::remove_cvref_t<Type>::serialize(archive, item);
-        }
-        || requires(Type && item, Archive && archive)
-        {
-            serialize(archive, item);
-        };
+        return requires {
+                   requires std::same_as<
+                       typename std::remove_cvref_t<Type>::serialize,
+                       members<
+                           std::remove_cvref_t<Type>::serialize::value>>;
+               } ||
+               requires(Type && item) {
+                   requires std::same_as<
+                       std::remove_cvref_t<decltype(try_serialize(
+                           item))>,
+                       members<std::remove_cvref_t<
+                           decltype(try_serialize(item))>::value>>;
+               } ||
+               requires {
+                   requires std::same_as<
+                       typename std::remove_cvref_t<Type>::serialize,
+                       protocol<
+                           std::remove_cvref_t<Type>::serialize::value,
+                           std::remove_cvref_t<Type>::serialize::members>>;
+               } ||
+               requires(Type && item) {
+                   requires std::same_as<
+                       std::remove_cvref_t<decltype(try_serialize(
+                           item))>,
+                       protocol<
+                           std::remove_cvref_t<decltype(try_serialize(
+                               item))>::value,
+                           std::remove_cvref_t<decltype(try_serialize(
+                               item))>::members>>;
+               } ||
+               requires(Type && item, Archive && archive) {
+                   std::remove_cvref_t<Type>::serialize(archive, item);
+               } || requires(Type && item, Archive && archive) {
+                        serialize(archive, item);
+                    };
     }
 
     template <typename Type, typename Archive>
@@ -319,10 +324,10 @@ struct access
         || requires(Type && item)
         {
             requires std::same_as<
-                std::remove_cvref_t<decltype(serialize(item))>,
+                std::remove_cvref_t<decltype(try_serialize(item))>,
                 protocol<
-                    std::remove_cvref_t<decltype(serialize(item))>::value,
-                    std::remove_cvref_t<decltype(serialize(
+                    std::remove_cvref_t<decltype(try_serialize(item))>::value,
+                    std::remove_cvref_t<decltype(try_serialize(
                         item))>::members>>;
         };
     }
@@ -342,13 +347,13 @@ struct access
         } else if constexpr (
             requires(Type && item) {
                 requires std::same_as<
-                    std::remove_cvref_t<decltype(serialize(item))>,
-                    protocol<std::remove_cvref_t<decltype(serialize(
+                    std::remove_cvref_t<decltype(try_serialize(item))>,
+                    protocol<std::remove_cvref_t<decltype(try_serialize(
                                  item))>::value,
-                             std::remove_cvref_t<decltype(serialize(
+                             std::remove_cvref_t<decltype(try_serialize(
                                  item))>::members>>;
             }) {
-            return std::remove_cvref_t<decltype(serialize(
+            return std::remove_cvref_t<decltype(try_serialize(
                 std::declval<Type>()))>::value;
         } else {
             static_assert(!sizeof(Type));
@@ -1145,10 +1150,10 @@ constexpr auto access::number_of_members()
         return type::serialize::value;
     } else if constexpr (requires(Type && item) {
                              requires std::same_as<
-                                 decltype(serialize(item)),
-                                 members<decltype(serialize(
+                                 decltype(try_serialize(item)),
+                                 members<decltype(try_serialize(
                                      item))::value>>;
-                             requires decltype(serialize(
+                             requires decltype(try_serialize(
                                  item))::value !=
                                  std::numeric_limits<
                                      std::size_t>::max();
@@ -1166,11 +1171,11 @@ constexpr auto access::number_of_members()
         return type::serialize::members;
     } else if constexpr (requires(Type && item) {
                              requires std::same_as<
-                                 decltype(serialize(item)),
-                                 protocol<decltype(serialize(item))::value,
-                                          decltype(serialize(
+                                 decltype(try_serialize(item)),
+                                 protocol<decltype(try_serialize(item))::value,
+                                          decltype(try_serialize(
                                               item))::members>>;
-                             requires decltype(serialize(
+                             requires decltype(try_serialize(
                                  item))::members !=
                                  std::numeric_limits<
                                      std::size_t>::max();
