@@ -1258,6 +1258,14 @@ constexpr auto access::byte_serializable()
                  0)>::value == 0;
         }) {
         return false;
+    } else if constexpr (concepts::container<type> &&
+                         concepts::has_fixed_nonzero_size<type> &&
+                         requires {
+                             type{}.size() * sizeof(typename type::value_type) ==
+                                 sizeof(type);
+                             type{}.data();
+                         }) {
+        return byte_serializable<typename type::value_type>();
     } else if constexpr (members_count > 0) {
         return visit_members_types<type>(
             byte_serializable_visitor<type>{})();
@@ -1317,6 +1325,15 @@ constexpr auto access::endian_independent_byte_serializable()
                  0)>::value == 0;
         }) {
         return false;
+    } else if constexpr (concepts::container<type> &&
+                         concepts::has_fixed_nonzero_size<type> &&
+                         requires {
+                             type{}.size() * sizeof(typename type::value_type) ==
+                                 sizeof(type);
+                             type{}.data();
+                         }) {
+        return endian_independent_byte_serializable<
+            typename type::value_type>();
     } else if constexpr (members_count > 0) {
         return visit_members_types<type>(
             endian_independent_byte_serializable_visitor<type>{})();

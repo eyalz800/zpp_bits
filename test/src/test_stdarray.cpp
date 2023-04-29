@@ -45,3 +45,37 @@ TEST(stdarray, string)
     }
 }
 
+TEST(stdarray, large_array)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    std::array<int, 0x1000> a1 = {1,2,3,4};
+    out(a1).or_throw();
+
+    std::array<int, 0x1000> a2{};
+    in(a2).or_throw();
+
+    for (std::size_t i = 0; i < std::extent_v<decltype(a1)>; ++i) {
+        EXPECT_EQ(a1[i], a2[i]);
+    }
+}
+
+TEST(stdarray, large_array_in_struct)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    struct a
+    {
+        std::array<int, 0x1000> a1 = {1,2,3,4};
+    };
+
+    a a1 = {1,2,3,4};
+    out(a1).or_throw();
+
+    a a2;
+    in(a2).or_throw();
+
+    for (std::size_t i = 0; i < std::extent_v<decltype(a::a1)>; ++i) {
+        EXPECT_EQ(a1.a1[i], a2.a1[i]);
+    }
+}
+
+
