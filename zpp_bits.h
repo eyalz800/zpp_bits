@@ -2043,6 +2043,10 @@ protected:
                     std::remove_cvref_t<decltype(*item.data())>>);
 
             auto item_size_in_bytes = item.size_in_bytes();
+            if (!item_size_in_bytes) [[unlikely]] {
+                return {};
+            }
+
             if constexpr (resizable) {
                 if (auto result = enlarge_for(item_size_in_bytes);
                     failure(result)) [[unlikely]] {
@@ -2596,6 +2600,10 @@ private:
 
             auto size = m_data.size();
             auto item_size_in_bytes = item.size_in_bytes();
+            if (!item_size_in_bytes) [[unlikely]] {
+                return {};
+            }
+
             if (item_size_in_bytes > size - m_position) [[unlikely]] {
                 return std::errc::result_out_of_range;
             }
