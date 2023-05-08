@@ -972,8 +972,8 @@ public:
     {
     }
 
-    constexpr explicit bytes(std::span<Item> items, std::size_t size) :
-        m_items(items.data()), m_size(size)
+    constexpr explicit bytes(std::span<Item> items, auto size) :
+        m_items(items.data()), m_size(std::size_t(size))
     {
     }
 
