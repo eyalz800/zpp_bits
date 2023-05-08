@@ -817,7 +817,7 @@ template <typename Type>
 concept by_protocol = has_protocol<Type> && !has_explicit_serialize<Type>;
 
 template <typename Type>
-concept array = std::is_array_v<std::remove_cvref_t<Type>>;
+concept basic_array = std::is_array_v<std::remove_cvref_t<Type>>;
 
 template <typename Type>
 concept unspecialized =
@@ -890,6 +890,16 @@ concept has_fixed_nonzero_size = requires
     requires std::integral_constant<std::size_t,
         std::remove_cvref_t<Type>{}.size()>::value != 0;
 };
+
+template <typename Type>
+concept array =
+    basic_array<Type> ||
+    (container<Type> && has_fixed_nonzero_size<Type> && requires {
+        requires Type {
+        }
+        .size() * sizeof(typename Type::value_type) == sizeof(Type);
+        Type{}.data();
+    });
 
 } // namespace concepts
 
@@ -1258,14 +1268,9 @@ constexpr auto access::byte_serializable()
                  0)>::value == 0;
         }) {
         return false;
-    } else if constexpr (concepts::container<type> &&
-                         concepts::has_fixed_nonzero_size<type> &&
-                         requires {
-                             type{}.size() * sizeof(typename type::value_type) ==
-                                 sizeof(type);
-                             type{}.data();
-                         }) {
-        return byte_serializable<typename type::value_type>();
+    } else if constexpr (concepts::array<type>) {
+        return byte_serializable<
+            std::remove_cvref_t<decltype(std::declval<type>()[0])>>();
     } else if constexpr (members_count > 0) {
         return visit_members_types<type>(
             byte_serializable_visitor<type>{})();
@@ -1325,15 +1330,9 @@ constexpr auto access::endian_independent_byte_serializable()
                  0)>::value == 0;
         }) {
         return false;
-    } else if constexpr (concepts::container<type> &&
-                         concepts::has_fixed_nonzero_size<type> &&
-                         requires {
-                             type{}.size() * sizeof(typename type::value_type) ==
-                                 sizeof(type);
-                             type{}.data();
-                         }) {
+    } else if constexpr (concepts::array<type>) {
         return endian_independent_byte_serializable<
-            typename type::value_type>();
+            std::remove_cvref_t<decltype(std::declval<type>()[0])>>();
     } else if constexpr (members_count > 0) {
         return visit_members_types<type>(
             endian_independent_byte_serializable_visitor<type>{})();
@@ -1385,6 +1384,11 @@ constexpr auto access::self_referencing()
         return false;
     } else if constexpr (members_count == 0) {
         return false;
+    } else if constexpr (concepts::array<type>) {
+        return self_referencing<
+            std::remove_cvref_t<decltype(std::declval<type>()[0])>,
+            self,
+            Visited...>();
     } else {
         return visit_members_types<type>(
             self_referencing_visitor<type, self, Visited...>{})();
