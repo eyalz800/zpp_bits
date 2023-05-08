@@ -2137,7 +2137,6 @@ protected:
         using type = std::remove_cvref_t<decltype(container)>;
         using value_type = typename type::value_type;
 
-
         if constexpr (concepts::serialize_as_bytes<decltype(*this),
                                                    value_type> &&
                       std::is_base_of_v<std::random_access_iterator_tag,
