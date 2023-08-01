@@ -431,6 +431,7 @@ TEST(test_rpc, member_function_void_throwing_returns_throwing_no_params)
 }
 #endif
 
+#if defined __clang__ || !defined __GNUC__ || __GNUC__ >= 12 // GCC issue
 static std::vector<char> x(int)
 {
     return std::vector<char>(10, 65);
@@ -473,5 +474,6 @@ TEST(test_rpc, mismatching_signatures_causing_too_large_allocation)
         FAIL();
     }
 }
+#endif
 
 } // namespace test_rpc
