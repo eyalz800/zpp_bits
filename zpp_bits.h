@@ -3441,7 +3441,8 @@ struct [[nodiscard]] value_or_errc
     }
 
     constexpr explicit value_or_errc(error_type error) :
-        m_error(std::forward<decltype(error)>(error))
+        m_error(std::forward<decltype(error)>(error)),
+        m_failure(true)
     {
     }
 
