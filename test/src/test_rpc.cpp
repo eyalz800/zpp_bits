@@ -431,4 +431,47 @@ TEST(test_rpc, member_function_void_throwing_returns_throwing_no_params)
 }
 #endif
 
+static std::vector<char> x(int)
+{
+    return std::vector<char>(10, 65);
+}
+
+static std::vector<char> y(const std::string &)
+{
+    return std::vector<char>(10, 65);
+}
+
+TEST(test_rpc, mismatching_signatures_causing_too_large_allocation)
+{
+    try {
+        using namespace std::literals;
+        using namespace zpp::bits::literals;
+
+        auto [data, in, out] =
+            zpp::bits::data_in_out(zpp::bits::alloc_limit<0x20000>{});
+
+        using rpc_server = zpp::bits::rpc<
+            zpp::bits::bind<x, "foo"_sha256_int>
+        >;
+        auto server = rpc_server::server(in, out);
+
+        using rpc_client = zpp::bits::rpc<
+            zpp::bits::bind<y, "foo"_sha256_int>
+        >;
+        auto client = rpc_client::client(in, out);
+
+        client.request<"foo"_sha256_int>("hello"s).or_throw();
+        server.serve().or_throw();
+
+        auto a = client.response<"foo"_sha256_int>().or_throw();
+        FAIL();
+    } catch (const std::system_error & error) {
+        EXPECT_EQ(error.code(), std::errc::message_size);
+    } catch (const std::exception& error) {
+        FAIL();
+    } catch (...) {
+        FAIL();
+    }
+}
+
 } // namespace test_rpc
