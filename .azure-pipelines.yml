@@ -17,20 +17,6 @@ strategy:
       CLANG_VERSION: '12'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
       TEST_AUTODETECT: 0
-    # ubuntu-20.04-gcc:
-    #   VM_IMAGE: 'ubuntu-20.04'
-    #   OPERATING_SYSTEM: 'linux'
-    #   COMPILER: 'gcc'
-    #   GCC_VERSION: '11'
-    #   ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
-    #   TEST_AUTODETECT: 0
-    ubuntu-22.04:
-      VM_IMAGE: 'ubuntu-22.04'
-      OPERATING_SYSTEM: 'linux'
-      COMPILER: 'clang'
-      CLANG_VERSION: '13'
-      ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
-      TEST_AUTODETECT: 1
     macOS-11:
       VM_IMAGE: 'macOS-11'
       OPERATING_SYSTEM: 'mac-os'
