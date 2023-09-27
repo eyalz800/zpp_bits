@@ -1894,10 +1894,14 @@ public:
         return m_position;
     }
 
+    constexpr std::size_t remaining_size()
+    {
+        return (m_position > m_data.size()) ? 0U : (m_data.size() - m_position);
+    }
+
     constexpr auto remaining_data()
     {
-        return std::span<byte_type>{m_data.data() + m_position,
-                                    m_data.size() - m_position};
+        return std::span<byte_type>{m_data.data() + m_position, remaining_size()};
     }
 
     constexpr auto processed_data()
@@ -1918,7 +1922,14 @@ public:
     ZPP_BITS_INLINE constexpr errc enlarge_for(auto additional_size)
     {
         auto size = m_data.size();
-        if (additional_size > size - m_position) [[unlikely]] {
+        bool const posAdjust = [&]{
+            if (m_position > size) {
+                additional_size += (m_position - size);
+                return true;
+            }
+            return false;
+        }();
+        if (posAdjust || additional_size > remaining_size()) [[unlikely]] {
             constexpr auto multiplier = std::get<0>(enlarger);
             constexpr auto divisor = std::get<1>(enlarger);
             static_assert(multiplier != 0 && divisor != 0);
@@ -2006,7 +2017,7 @@ protected:
                     failure(result)) [[unlikely]] {
                     return result;
                 }
-            } else if (sizeof(item) > m_data.size() - m_position)
+            } else if (sizeof(item) > remaining_size())
                 [[unlikely]] {
                 return std::errc::result_out_of_range;
             }
@@ -2056,7 +2067,7 @@ protected:
                     failure(result)) [[unlikely]] {
                     return result;
                 }
-            } else if (item_size_in_bytes > m_data.size() - m_position)
+            } else if (item_size_in_bytes > remaining_size())
                 [[unlikely]] {
                 return std::errc::result_out_of_range;
             }
@@ -2274,7 +2285,7 @@ protected:
                 failure(result)) [[unlikely]] {
                 return result;
             }
-        } else if (size_in_bytes > m_data.size() - m_position)
+        } else if (size_in_bytes > remaining_size())
             [[unlikely]] {
             return std::errc::result_out_of_range;
         }
@@ -2501,10 +2512,15 @@ public:
         return m_position;
     }
 
+    constexpr std::size_t remaining_size()
+    {
+        return (m_position > m_data.size()) ? 0U : (m_data.size() - m_position);
+    }
+
     constexpr auto remaining_data()
     {
         return std::span<byte_type>{m_data.data() + m_position,
-                                    m_data.size() - m_position};
+                                    remaining_size()};
     }
 
     constexpr auto processed_data()
@@ -2560,8 +2576,7 @@ private:
         } else if constexpr (requires { serialize(*this, item); }) {
             return serialize(*this, item);
         } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
-            auto size = m_data.size();
-            if (sizeof(item) > size - m_position) [[unlikely]] {
+            if (sizeof(item) > remaining_size()) [[unlikely]] {
                 return std::errc::result_out_of_range;
             }
             if (std::is_constant_evaluated()) {
@@ -2601,13 +2616,12 @@ private:
                 concepts::byte_type<
                     std::remove_cvref_t<decltype(*item.data())>>);
 
-            auto size = m_data.size();
             auto item_size_in_bytes = item.size_in_bytes();
             if (!item_size_in_bytes) [[unlikely]] {
                 return {};
             }
 
-            if (item_size_in_bytes > size - m_position) [[unlikely]] {
+            if (item_size_in_bytes > remaining_size()) [[unlikely]] {
                 return std::errc::result_out_of_range;
             }
             if (std::is_constant_evaluated()) {
@@ -2718,7 +2732,7 @@ private:
                                   std::same_as<char, value_type> ||
                                   std::same_as<unsigned char,
                                                value_type>)) {
-                if (size > m_data.size() - m_position) [[unlikely]] {
+                if (size > remaining_size()) [[unlikely]] {
                     return std::errc::result_out_of_range;
                 }
                 container = {m_data.data() + m_position, size};
@@ -2769,17 +2783,16 @@ private:
                                            std::dynamic_extent);
                                   requires concepts::has_fixed_nonzero_size<type>;
                               }) {
-                    if (type::extent > m_data.size() - m_position)
+                    if (type::extent > remaining_size())
                         [[unlikely]] {
                         return std::errc::result_out_of_range;
                     }
                     container = {m_data.data() + m_position, type::extent};
                     m_position += type::extent;
                 } else if constexpr (std::is_void_v<SizeType>) {
-                    auto size = m_data.size();
                     container = {m_data.data() + m_position,
-                                 size - m_position};
-                    m_position = size;
+                                 remaining_size()};
+                    m_position = m_data.size();
                 }
                 return {};
             } else {
@@ -5669,4 +5682,3 @@ using native_u32string_view = sized_t<std::u32string_view, std::u32string_view::
 } // namespace zpp::bits
 
 #endif // ZPP_BITS_H
-
