@@ -2820,9 +2820,7 @@ private:
             if constexpr (requires { typename type::mapped_type; }) {
                 using value_type = std::pair<typename type::key_type,
                                              typename type::mapped_type>;
-                std::aligned_storage_t<sizeof(value_type),
-                                       alignof(value_type)>
-                    storage;
+                alignas(value_type) std::byte storage[sizeof(value_type)];
 
                 auto object = access::placement_new<value_type>(
                     std::addressof(storage));
@@ -2836,9 +2834,7 @@ private:
             } else {
                 using value_type = typename type::value_type;
 
-                std::aligned_storage_t<sizeof(value_type),
-                                       alignof(value_type)>
-                    storage;
+                alignas(value_type) std::byte storage[sizeof(value_type)];
 
                 auto object = access::placement_new<value_type>(
                     std::addressof(storage));
@@ -2896,8 +2892,7 @@ private:
                 return result;
             }
         } else {
-            std::aligned_storage_t<sizeof(value_type), alignof(value_type)>
-                storage;
+            alignas(value_type) std::byte storage[sizeof(value_type)];
 
             auto object =
                 access::placement_new<value_type>(std::addressof(storage));
@@ -2940,9 +2935,7 @@ private:
                 }
                 return serialize_one(*std::get_if<element_type>(&variant));
             } else {
-                std::aligned_storage_t<sizeof(element_type),
-                                       alignof(element_type)>
-                    storage;
+                alignas(element_type) std::byte storage[sizeof(element_type)];
 
                 auto object = access::placement_new<element_type>(
                     std::addressof(storage));
@@ -2989,8 +2982,7 @@ private:
                     return self.serialize_one(
                         *std::get_if<Types>(&variant));
                 } else {
-                    std::aligned_storage_t<sizeof(Types), alignof(Types)>
-                        storage;
+                    alignas(Types) std::byte storage[sizeof(Types)];
 
                     auto object = access::placement_new<Types>(
                         std::addressof(storage));
@@ -5023,9 +5015,7 @@ struct pb
                 serialize use();
             };
 
-            std::aligned_storage_t<sizeof(value_type),
-                                   alignof(value_type)>
-                storage;
+            alignas(value_type) std::byte storage[sizeof(value_type)];
 
             auto object =
                 access::placement_new<value_type>(std::addressof(storage));
@@ -5105,9 +5095,7 @@ struct pb
                     return errc{};
                 }
             } else {
-                std::aligned_storage_t<sizeof(value_type),
-                                       alignof(value_type)>
-                    storage;
+                alignas(value_type) std::byte storage[sizeof(value_type)];
 
                 auto object = access::placement_new<value_type>(
                     std::addressof(storage));
