@@ -15,7 +15,7 @@ TEST(test_bitset, sanity)
     in(i).or_throw();
 
     EXPECT_EQ(in.position(), 1u);
-    EXPECT_EQ(i, i);
+    EXPECT_EQ(o, i);
 }
 
 } // namespace test_bitset
