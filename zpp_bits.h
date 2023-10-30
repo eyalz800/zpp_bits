@@ -2000,7 +2000,7 @@ protected:
             return type::serialize(*this, item);
         } else if constexpr (requires { serialize(*this, item); }) {
             return serialize(*this, item);
-        } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+        } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> || (sizeof(type) == 1 && std::is_trivially_copyable_v<type>)){
             if constexpr (resizable) {
                 if (auto result = enlarge_for(sizeof(item));
                     failure(result)) [[unlikely]] {
@@ -2559,7 +2559,7 @@ private:
             return type::serialize(*this, item);
         } else if constexpr (requires { serialize(*this, item); }) {
             return serialize(*this, item);
-        } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type>) {
+        } else if constexpr (std::is_fundamental_v<type> || std::is_enum_v<type> || (sizeof(type) == 1 && std::is_trivially_copyable_v<type>)) {
             auto size = m_data.size();
             if (sizeof(item) > size - m_position) [[unlikely]] {
                 return std::errc::result_out_of_range;
