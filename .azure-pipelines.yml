@@ -21,7 +21,7 @@ strategy:
       VM_IMAGE: 'macOS-11'
       OPERATING_SYSTEM: 'mac-os'
       COMPILER: 'clang'
-      CLANG_VERSION: '13'
+      CLANG_VERSION: '17'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
       TEST_AUTODETECT: 1
 
@@ -45,7 +45,7 @@ steps:
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'gcc'))
 
 - script: |
-    brew install llvm@$(CLANG_VERSION) make
+    brew install --force-bottle llvm@$(CLANG_VERSION) make
   displayName: 'install (mac)'
   condition: eq(variables['OPERATING_SYSTEM'], 'mac-os')
 
