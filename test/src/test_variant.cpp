@@ -38,6 +38,34 @@ TEST(variant, string)
     EXPECT_EQ(std::get<std::string>(v), "1234");
 }
 
+TEST(variant, private_default_constructible)
+{
+    struct int_string : std::string
+    {
+        int_string(int i) : std::string(std::to_string(i))
+        {
+        }
+
+    private:
+        friend zpp::bits::access;
+        int_string() = default;
+    };
+
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(std::variant<std::string, int_string>(1234)).or_throw();
+
+    EXPECT_EQ(encode_hex(data),
+              "01"
+              "04000000"
+              "31323334");
+
+    std::variant<std::string, int_string> v;
+    in(v).or_throw();
+
+    EXPECT_TRUE(std::holds_alternative<int_string>(v));
+    EXPECT_EQ(std::get<int_string>(v), "1234");
+}
+
 namespace string_versioning::v1
 {
 struct person

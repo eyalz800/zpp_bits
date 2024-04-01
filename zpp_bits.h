@@ -2993,6 +2993,7 @@ private:
                         return result;
                     }
                     variant = std::move(*object);
+                    return errc{};
                 }
             }...};
 
