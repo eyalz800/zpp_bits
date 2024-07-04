@@ -57,7 +57,7 @@ jobs:
             make: gmake
             mode: release
             os: macos
-            vm_image: macos-11
+            vm_image: macos-12
             test_autodetect_members: 0
             with_zpp_throwing: 1
           - name: Clang 13 MacOS
@@ -66,7 +66,7 @@ jobs:
             make: gmake
             mode: release
             os: macos
-            vm_image: macos-11
+            vm_image: macos-12
             test_autodetect_members: 1
             with_zpp_throwing: 1
     env:
