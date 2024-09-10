@@ -3293,7 +3293,7 @@ struct known_dynamic_id_variant
     ZPP_BITS_INLINE constexpr static auto serialize(auto & serializer,
                                                     auto & self)
     {
-        return serializer.template serialize_one(self.variant, self.id);
+        return serializer.serialize_one(self.variant, self.id);
     }
 
     Variant & variant;
