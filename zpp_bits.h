@@ -2680,8 +2680,12 @@ private:
     {
         using type = std::remove_cvref_t<decltype(container)>;
         using value_type = typename type::value_type;
-        constexpr auto is_const = std::is_const_v<
-            std::remove_reference_t<decltype(container[0])>>;
+        constexpr auto is_const =
+            std::is_const_v<std::remove_reference_t<value_type>> ||
+            requires {
+                requires std::is_const_v<
+                    std::remove_reference_t<decltype(container[0])>>;
+            };
 
         if constexpr (!std::is_void_v<SizeType> &&
                       (requires(type container) { container.resize(1); } ||
