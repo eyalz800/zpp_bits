@@ -17,8 +17,8 @@ strategy:
       CLANG_VERSION: '12'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
       TEST_AUTODETECT: 0
-    macOS-12:
-      VM_IMAGE: 'macOS-12'
+    macOS-15:
+      VM_IMAGE: 'macOS-15'
       OPERATING_SYSTEM: 'mac-os'
       COMPILER: 'clang'
       CLANG_VERSION: '17'
