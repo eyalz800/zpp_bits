@@ -16,7 +16,7 @@ Contents
 * [Error Handling](#error-handling)
 * [Error Codes](#error-codes)
 * [Serializing Non-Aggregates](#serializing-non-aggregates)
-* [Serializing Private Classes](#serializing-private_classes)
+* [Serializing Private Classes](#serializing-private-classes)
 * [Explicit Serialization](#explicit-serialization)
 * [Archive Creation](#archive-creation)
 * [Constexpr Serialization](#constexpr-serialization)
