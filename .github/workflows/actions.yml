@@ -51,18 +51,18 @@ jobs:
             vm_image: ubuntu-20.04
             test_autodetect_members: 1
             with_zpp_throwing: 1
-          - name: Clang 12 MacOS
+          - name: Clang 17 MacOS
             compiler: clang
-            compiler_version: 12
+            compiler_version: 17
             make: gmake
             mode: release
             os: macos
             vm_image: macos-15
             test_autodetect_members: 0
             with_zpp_throwing: 1
-          - name: Clang 13 MacOS
+          - name: Clang 18 MacOS
             compiler: clang
-            compiler_version: 13
+            compiler_version: 18
             make: gmake
             mode: release
             os: macos
