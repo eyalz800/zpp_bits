@@ -23,6 +23,7 @@
 #include <utility>
 #include <variant>
 #include <vector>
+#include <version>
 #if __has_include("zpp_throwing.h")
 #include "zpp_throwing.h"
 #endif
@@ -200,6 +201,34 @@ struct access
     template <typename Type>
     constexpr static auto number_of_members();
 
+#if __cpp_structured_bindings >= 202411L
+#if (__cplusplus < 202600L) && (defined __clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++26-extensions"
+#endif
+    ZPP_BITS_INLINE constexpr static decltype(auto) visit_members(auto && object,
+            auto && visitor)
+    {
+        auto && [...members] = object;
+        return visitor(members...);
+    }
+
+    template <typename Type>
+    ZPP_BITS_INLINE constexpr static auto visit_members_types(auto && visitor)
+    {
+        using type = std::remove_cvref_t<Type>;
+
+        auto f = [&](auto && object) {
+            auto && [...members] = object;
+            return visitor.template operator()<decltype(members)...>();
+        };
+        return decltype(f(std::declval<type>()))();
+    }
+#if (__cplusplus < 202600L) && (defined __clang__)
+#pragma clang diagnostic pop
+#endif
+#else
+
     constexpr static auto max_visit_members = 50;
 
     ZPP_BITS_INLINE constexpr static decltype(auto) visit_members(
@@ -232,6 +261,7 @@ struct access
         }
         // clang-format on
     }
+#endif
 
     constexpr static auto try_serialize(auto && item)
     {
@@ -901,6 +931,11 @@ concept array =
         Type{}.data();
     });
 
+template <typename Type>
+concept inspection_guarded =
+    (container<Type> && !array<Type>) || owning_pointer<Type> ||
+    variant<Type> || optional<Type> || bitset<Type>;
+
 } // namespace concepts
 
 template <typename CharType, std::size_t Size>
@@ -1191,7 +1226,20 @@ constexpr auto access::number_of_members()
                                      std::size_t>::max();
                          }) {
         return decltype(serialize(std::declval<type>()))::members;
-#if ZPP_BITS_AUTODETECT_MEMBERS_MODE == 0
+#if __cpp_structured_bindings >= 202411L
+#if (__cplusplus < 202600L) && (defined __clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++26-extensions"
+#endif
+    } else if constexpr (!concepts::inspection_guarded<type>) {
+        return decltype([](Type && item) {
+            auto && [...members] = item;
+            return std::integral_constant<std::size_t, sizeof...(members)>{};
+        } (std::declval<Type>()))::value;
+#if (__cplusplus < 202600L) && (defined __clang__)
+#pragma clang diagnostic pop
+#endif
+#elif ZPP_BITS_AUTODETECT_MEMBERS_MODE == 0
     } else if constexpr (std::is_aggregate_v<type>) {
         // clang-format off
         if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{},  /*.................................................................................................................*/ any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 50; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 49; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 48; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 47; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 46; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 45; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 44; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 43; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 42; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 41; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 40; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 39; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 38; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 37; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 36; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 35; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 34; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 33; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 32; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 31; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 30; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 29; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 28; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 27; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 26; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 25; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 24; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 23; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 22; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 21; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 20; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 19; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 18; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 17; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 16; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 15; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 14; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 13; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 12; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 11; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 10; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 9; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 8; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 7; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}, any{}}; }) { return 6; } else if constexpr (requires { type{any{}, any{}, any{}, any{}, any{}}; }) { return 5; } else if constexpr (requires { type{any{}, any{}, any{}, any{}}; }) { return 4; } else if constexpr (requires { type{any{}, any{}, any{}}; }) { return 3; } else if constexpr (requires { type{any{}, any{}}; }) { return 2; } else if constexpr (requires { type{any{}}; }) { return 1;
