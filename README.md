@@ -59,7 +59,8 @@ polymorphic types with fixed 8 bytes of sha1 serialization id.
 Introduction
 ------------
 For many types, enabling serialization is transparent and requires no additional lines of code.
-These types are required to be of aggregate type, with non array members.
+Pre-C++26, these types are required to be of aggregate type, with non array members.
+Post C++26, the feature "(P1061) Structured bindings can introduce a pack", lifts this requirement.
 Here is an example of a `person` class with name and age:
 ```cpp
 struct person
@@ -185,6 +186,8 @@ which one you used:
 
 Serializing Non-Aggregates
 --------------------------
+Pre-C++26, the library provides a way to serialize non-aggregates, requiring the user to provide
+the number of members in the class.
 For most non-aggregate types (or aggregate types with array members),
 enabling serialization is a one liner. Here is an example of a non-aggregate
 `person` class:
@@ -220,6 +223,22 @@ auto serialize(const person & person) -> zpp::bits::members<2>;
 } // namespace my_namespace
 ```
 
+Post C++26, the above works without a need to provide the number of members:
+```cpp
+namespace my_namespace
+{
+struct person
+{
+    person(auto && ...){/*...*/} // Make non-aggregate.
+
+    std::string name;
+    int age{};
+};
+
+} // namespace my_namespace
+```
+
+### Deprecated behavior
 In some compilers, *SFINAE* works with `requires expression` under `if constexpr` and `unevaluated lambda expression`. It means
 that even with non aggregate types the number of members can be detected automatically in cases where all members are in the same struct.
 To opt-in, define `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1`.
@@ -235,6 +254,7 @@ struct person
 ```
 This works with `clang 13`, however the portability of this is not clear, since in `gcc` it does not work (it is a hard error) and it explicitly states
 in the standard that there is intent not to allow *SFINAE* in similar cases, so it is turned off by default.
+Update: this is not supported anymore with recent versions of `clang`, and as such `ZPP_BITS_AUTODETECT_MEMBERS_MODE=1` is deprecated.
 
 Serializing Private Classes
 ---------------------------
@@ -246,6 +266,18 @@ struct private_person
     // Add this line to your class.
     friend zpp::bits::access;
     using serialize = zpp::bits::members<2>;
+
+private:
+    std::string name;
+    int age{};
+};
+```
+
+Post C++26, the above example is simplified to the below without a need to specify the number of members:
+```cpp
+struct private_person
+{
+    friend zpp::bits::access;
 
 private:
     std::string name;
