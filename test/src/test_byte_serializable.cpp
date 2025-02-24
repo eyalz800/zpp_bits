@@ -204,6 +204,7 @@ private:
 #if __cpp_structured_bindings < 202411L // This check is no longer supported until C++26 reflections.
 static_assert(!zpp::bits::concepts::byte_serializable<
               inaccessible_requires_padding>);
+#endif
 
 class inaccessible_friend_requires_padding
 {
