@@ -6,7 +6,7 @@ using namespace std::literals;
 
 struct person
 {
-#if ZPP_BITS_AUTODETECT_MEMBERS_MODE > 0
+#if __cpp_structured_bindings >= 202411L
     person(auto &&...)
     {
     }
@@ -37,9 +37,7 @@ TEST(detect_members_serialize, sanity)
 
 struct point
 {
-    using serialize = zpp::bits::members<2>;
-
-#if ZPP_BITS_AUTODETECT_MEMBERS_MODE > 0
+#if __cpp_structured_bindings >= 202411L
     point(auto &&...)
     {
     }
@@ -71,7 +69,7 @@ TEST(detect_members_serialize, point)
 
 struct number
 {
-#if ZPP_BITS_AUTODETECT_MEMBERS_MODE > 0
+#if __cpp_structured_bindings >= 202411L
     number(auto &&...)
     {
     }
@@ -97,7 +95,7 @@ TEST(detect_members_serialize, number)
     EXPECT_EQ(n2.x, 1338);
 }
 
-#if ZPP_BITS_AUTODETECT_MEMBERS_MODE > 0
+#if __cpp_structured_bindings >= 202411L
 class private_person
 {
     private_person(auto &&...)
