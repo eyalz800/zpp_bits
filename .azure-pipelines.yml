@@ -3,20 +3,13 @@ trigger:
 
 strategy:
   matrix:
-    ubuntu-20.04-clang:
-      VM_IMAGE: 'ubuntu-20.04'
+    ubuntu-22.04-clang:
+      VM_IMAGE: 'ubuntu-22.04'
       OPERATING_SYSTEM: 'linux'
       COMPILER: 'clang'
       CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
       TEST_AUTODETECT: 1
-    ubuntu-20.04-clang12:
-      VM_IMAGE: 'ubuntu-20.04'
-      OPERATING_SYSTEM: 'linux'
-      COMPILER: 'clang'
-      CLANG_VERSION: '12'
-      ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
-      TEST_AUTODETECT: 0
     macOS-15:
       VM_IMAGE: 'macOS-15'
       OPERATING_SYSTEM: 'mac-os'

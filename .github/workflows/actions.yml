@@ -21,7 +21,7 @@ jobs:
             make: make
             mode: release
             os: ubuntu
-            vm_image: ubuntu-20.04
+            vm_image: ubuntu-22.04
             test_autodetect_members: 0
             with_zpp_throwing: 0
           - name: GCC 12 Ubuntu
@@ -33,22 +33,13 @@ jobs:
             vm_image: ubuntu-22.04
             test_autodetect_members: 0
             with_zpp_throwing: 0
-          - name: Clang 12 Ubuntu
-            compiler: clang
-            compiler_version: 12
-            make: make
-            mode: release
-            os: ubuntu
-            vm_image: ubuntu-20.04
-            test_autodetect_members: 0
-            with_zpp_throwing: 1
           - name: Clang 13 Ubuntu
             compiler: clang
             compiler_version: 13
             make: make
             mode: release
             os: ubuntu
-            vm_image: ubuntu-20.04
+            vm_image: ubuntu-22.04
             test_autodetect_members: 1
             with_zpp_throwing: 1
           - name: Clang 21 Ubuntu
