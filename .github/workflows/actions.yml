@@ -42,9 +42,9 @@ jobs:
             vm_image: ubuntu-22.04
             test_autodetect_members: 1
             with_zpp_throwing: 1
-          - name: Clang 21 Ubuntu
+          - name: Clang 20 Ubuntu
             compiler: clang
-            compiler_version: 21
+            compiler_version: 20
             make: make
             mode: release
             os: ubuntu
