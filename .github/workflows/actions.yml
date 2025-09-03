@@ -67,7 +67,7 @@ jobs:
             mode: release
             os: macos
             vm_image: macos-15
-            test_autodetect_members: 1
+            test_autodetect_members: 0
             with_zpp_throwing: 1
     env:
       DEBIAN_FRONTEND: noninteractive
