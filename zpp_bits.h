@@ -6,6 +6,10 @@
 #include <bit>
 #include <climits>
 #include <compare>
+// Support for std::complex tuple protocol
+#if __cpp_lib_tuple_like < 202311L
+#include <complex>
+#endif
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -1636,6 +1640,28 @@ concept varint = requires
 };
 
 } // namespace concepts
+
+// Support for std::complex tuple protocol
+#if __cpp_lib_tuple_like < 202311L
+template <typename Archive, typename Type>
+ZPP_BITS_INLINE constexpr auto serialize(Archive& archive, const std::complex<Type>& c) 
+    requires (Archive::kind() == kind::out)
+{
+    return archive(c.real(), c.imag());
+}
+
+template <typename Archive, typename Type>
+ZPP_BITS_INLINE constexpr auto serialize(Archive& archive, std::complex<Type>& c) 
+    requires (Archive::kind() == kind::in)
+{
+    Type real_part, imag_part;
+    if (auto result = archive(real_part, imag_part); failure(result)) {
+        return result;
+    }
+    c = std::complex<Type>(real_part, imag_part);
+    return errc{};
+}
+#endif
 
 template <typename Type>
 constexpr auto varint_max_size = sizeof(Type) * CHAR_BIT / (CHAR_BIT - 1) +
