@@ -7,7 +7,7 @@ strategy:
       VM_IMAGE: 'ubuntu-22.04'
       OPERATING_SYSTEM: 'linux'
       COMPILER: 'clang'
-      CLANG_VERSION: '13'
+      CLANG_VERSION: '17'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
       TEST_AUTODETECT: 1
     macOS-15:

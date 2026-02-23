@@ -1,5 +1,5 @@
 #include "test.h"
-
+#if __cpp_lib_expected >= 202202L
 #include <expected>
 
 namespace test_expected
@@ -184,4 +184,6 @@ TEST(expected, private_default_constructible_error)
     EXPECT_FALSE(v.has_value());
     EXPECT_EQ(v.error(), "1234");
 }
+
 } // namespace test_expected
+#endif // __cpp_lib_expected >= 202202L
