@@ -3,20 +3,30 @@ trigger:
 
 strategy:
   matrix:
-    ubuntu-22.04-clang:
+    ubuntu-22.04-clang-17:
+      VM_IMAGE: 'ubuntu-22.04'
+      OPERATING_SYSTEM: 'linux'
+      COMPILER: 'clang'
+      CLANG_VERSION: '17'
+      ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
+      TEST_AUTODETECT: 1
+      CXX_STANDARD: 23
+    ubuntu-22.04-clang-13:
       VM_IMAGE: 'ubuntu-22.04'
       OPERATING_SYSTEM: 'linux'
       COMPILER: 'clang'
       CLANG_VERSION: '13'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
       TEST_AUTODETECT: 1
-    macOS-15:
+      CXX_STANDARD: 20
+    macOS-15-clang-17:
       VM_IMAGE: 'macOS-15'
       OPERATING_SYSTEM: 'mac-os'
       COMPILER: 'clang'
       CLANG_VERSION: '17'
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
       TEST_AUTODETECT: 1
+      CXX_STANDARD: 23
 
 pool:
   vmImage: $(VM_IMAGE)
@@ -48,12 +58,12 @@ steps:
   condition: eq(variables['COMPILER'], 'clang')
 
 - script: |
-    make -C test -f zpp.mk -j ZPP_BITS_AUTODETECT_MEMBERS_MODE=$(TEST_AUTODETECT)
+    make -C test -f zpp.mk -j ZPP_BITS_AUTODETECT_MEMBERS_MODE=$(TEST_AUTODETECT) ZPP_CXX_STANDARD=$(CXX_STANDARD)
   displayName: 'compile-debug (linux)'
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
 
 - script: |
-    make -C test -f zpp.mk -j mode=release ZPP_BITS_AUTODETECT_MEMBERS_MODE=$(TEST_AUTODETECT)
+    make -C test -f zpp.mk -j mode=release ZPP_BITS_AUTODETECT_MEMBERS_MODE=$(TEST_AUTODETECT) ZPP_CXX_STANDARD=$(CXX_STANDARD)
   displayName: 'compile-release (linux)'
   condition: and(eq(variables['OPERATING_SYSTEM'], 'linux'), eq(variables['COMPILER'], 'clang'))
 

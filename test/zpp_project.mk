@@ -12,6 +12,7 @@ ZPP_COMPILE_COMMANDS_JSON := compile_commands.json
 endif
 
 ifeq ($(ZPP_PROJECT_FLAGS), true)
+ZPP_CXX_STANDARD ?= 20
 ZPP_BITS_AUTODETECT_MEMBERS_MODE ?= 0
 ZPP_FLAGS := \
 	$(patsubst %, -I%, $(shell find . -type d -name "inc" -or -name "include")) \
@@ -24,7 +25,7 @@ ZPP_FLAGS_RELEASE := \
 ZPP_CFLAGS := $(ZPP_FLAGS) -std=c11
 ZPP_CFLAGS_DEBUG := $(ZPP_FLAGS_DEBUG)
 ZPP_CFLAGS_RELEASE := $(ZPP_FLAGS_RELEASE)
-ZPP_CXXFLAGS := $(ZPP_FLAGS) -std=c++20 -stdlib=libc++
+ZPP_CXXFLAGS := $(ZPP_FLAGS) -std=c++$(ZPP_CXX_STANDARD) -stdlib=libc++
 ZPP_CXXFLAGS_DEBUG := $(ZPP_FLAGS_DEBUG)
 ZPP_CXXFLAGS_RELEASE := $(ZPP_FLAGS_RELEASE)
 ZPP_CXXMFLAGS := -fPIE

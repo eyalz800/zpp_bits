@@ -796,7 +796,19 @@ concept variant = !has_serialize<Type> && requires (Type variant) {
 };
 
 template <typename Type>
-concept optional = !has_serialize<Type> && requires (Type optional) {
+concept expected = !has_serialize<Type> && requires (Type expected) {
+    typename std::remove_cvref_t<Type>::value_type;
+    typename std::remove_cvref_t<Type>::error_type;
+    typename std::remove_cvref_t<Type>::unexpected_type;
+    expected.value();
+    expected.error();
+    expected.has_value();
+    expected.operator bool();
+    expected.operator*();
+};
+
+template <typename Type>
+concept optional = !has_serialize<Type> && !expected<Type> && requires (Type optional) {
     optional.value();
     optional.has_value();
     optional.operator bool();
@@ -856,7 +868,7 @@ concept basic_array = std::is_array_v<std::remove_cvref_t<Type>>;
 template <typename Type>
 concept unspecialized =
     !container<Type> && !owning_pointer<Type> && !tuple<Type> &&
-    !variant<Type> && !optional<Type> && !bitset<Type> &&
+    !variant<Type> && !optional<Type> && !expected<Type> && !bitset<Type> &&
     !std::is_array_v<std::remove_cvref_t<Type>> && !by_protocol<Type>;
 
 template <typename Type>
@@ -2300,6 +2312,23 @@ protected:
         }
     }
 
+    ZPP_BITS_INLINE constexpr errc
+    serialize_one(concepts::expected auto && expected)
+    {
+        using type = std::remove_cvref_t<decltype(expected)>;
+        using value_type = typename type::value_type;
+
+        if (!expected) [[unlikely]] {
+            return serialize_many(std::byte(false), expected.error());
+        } else {
+            if constexpr (std::is_void_v<value_type>) {
+                return serialize_one(std::byte(true));
+            } else {
+                return serialize_many(std::byte(true), *expected);
+            }
+        }
+    }
+
     template <typename KnownId = void>
     ZPP_BITS_INLINE constexpr errc
     serialize_one(concepts::variant auto && variant)
@@ -2984,6 +3013,65 @@ private:
             optional = std::move(*object);
         }
 
+        return {};
+    }
+
+    ZPP_BITS_INLINE constexpr errc
+    serialize_one(concepts::expected auto && expected)
+    {
+        using type = std::remove_cvref_t<decltype(expected)>;
+        using value_type = typename type::value_type;
+        using error_type = typename type::error_type;
+        using unexpected_type = typename type::unexpected_type;
+
+        std::byte has_value{};
+        if (auto result = serialize_one(has_value); failure(result))
+            [[unlikely]] {
+            return result;
+        }
+
+        if (!bool(has_value)) [[unlikely]] {
+            if (expected.has_value()) {
+                if constexpr (std::is_default_constructible_v<
+                                  error_type>) {
+                    expected = unexpected_type(std::in_place_t{});
+                } else {
+                    alignas(error_type)
+                        std::byte storage[sizeof(error_type)];
+                    auto object = access::placement_new<error_type>(
+                        std::addressof(storage));
+                    destructor_guard guard{*object};
+                    expected = unexpected_type(std::move(*object));
+                }
+            }
+            if (auto result = serialize_one(expected.error());
+                failure(result)) [[unlikely]] {
+                return result;
+            }
+            return {};
+        }
+
+        if constexpr (std::is_void_v<value_type>) {
+            expected.emplace();
+        } else {
+            if (!expected.has_value()) [[unlikely]] {
+                if constexpr (std::is_default_constructible_v<
+                                  value_type>) {
+                    expected.emplace();
+                } else {
+                    alignas(value_type)
+                        std::byte storage[sizeof(value_type)];
+                    auto object = access::placement_new<value_type>(
+                        std::addressof(storage));
+                    destructor_guard guard{*object};
+                    expected = std::move(*object);
+                }
+            }
+            if (auto result = serialize_one(*expected); failure(result))
+                [[unlikely]] {
+                return result;
+            }
+        }
         return {};
     }
 
