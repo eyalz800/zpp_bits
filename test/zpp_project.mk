@@ -24,7 +24,12 @@ ZPP_FLAGS_RELEASE := \
 ZPP_CFLAGS := $(ZPP_FLAGS) -std=c11
 ZPP_CFLAGS_DEBUG := $(ZPP_FLAGS_DEBUG)
 ZPP_CFLAGS_RELEASE := $(ZPP_FLAGS_RELEASE)
-ZPP_CXXFLAGS := $(ZPP_FLAGS) -std=c++23 -stdlib=libc++
+ifdef ZPP_CXX
+ZPP_STD_VERSION := $(shell $(ZPP_CXX) -std=c++23 -x c++ -E - < /dev/null > /dev/null 2>&1 && echo -std=c++23 || echo -std=c++20)
+else
+ZPP_STD_VERSION := -std=c++20
+endif
+ZPP_CXXFLAGS := $(ZPP_FLAGS) $(ZPP_STD_VERSION) -stdlib=libc++
 ZPP_CXXFLAGS_DEBUG := $(ZPP_FLAGS_DEBUG)
 ZPP_CXXFLAGS_RELEASE := $(ZPP_FLAGS_RELEASE)
 ZPP_CXXMFLAGS := -fPIE
