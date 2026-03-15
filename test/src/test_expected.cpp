@@ -148,7 +148,7 @@ TEST(expected, private_default_constructible_value)
               "04000000"
               "31323334");
 
-    expected_type v(0);
+    expected_type v = std::unexpected("error");
     in(v).or_throw();
 
     EXPECT_TRUE(v.has_value());

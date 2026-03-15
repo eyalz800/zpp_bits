@@ -2324,7 +2324,7 @@ protected:
             if constexpr (std::is_void_v<value_type>) {
                 return serialize_one(std::byte(true));
             } else {
-                return serialize_many(std::byte(true), expected.value());
+                return serialize_many(std::byte(true), *expected);
             }
         }
     }
@@ -3031,54 +3031,43 @@ private:
         }
 
         if (!bool(has_value)) [[unlikely]] {
-            if constexpr (std::is_default_constructible_v<error_type>) {
-                error_type error{};
-                if (auto result = serialize_one(error); failure(result))
-                    [[unlikely]] {
-                    return result;
+            if (expected.has_value()) {
+                if constexpr (std::is_default_constructible_v<error_type>) {
+                    expected = unexpected_type(std::in_place_t{});
+                } else {
+                    alignas(error_type) std::byte storage[sizeof(error_type)];
+                    auto object =
+                        access::placement_new<error_type>(std::addressof(storage));
+                    destructor_guard guard{*object};
+                    expected = unexpected_type(std::move(*object));
                 }
-                expected = unexpected_type(std::move(error));
-            } else {
-                alignas(error_type) std::byte storage[sizeof(error_type)];
-
-                auto object =
-                    access::placement_new<error_type>(std::addressof(storage));
-                destructor_guard guard{*object};
-
-                if (auto result = serialize_one(*object); failure(result))
-                    [[unlikely]] {
-                    return result;
-                }
-
-                expected = unexpected_type(std::move(*object));
+            }
+            if (auto result = serialize_one(expected.error()); failure(result))
+                [[unlikely]] {
+                return result;
             }
             return {};
         }
 
         if constexpr (std::is_void_v<value_type>) {
-            expected = {};
-        } else if constexpr (std::is_default_constructible_v<value_type>) {
-            value_type value{};
-            if (auto result = serialize_one(value); failure(result))
-                [[unlikely]] {
-                return result;
-            }
-            expected = std::move(value);
+            expected.emplace();
         } else {
-            alignas(value_type) std::byte storage[sizeof(value_type)];
-
-            auto object =
-                access::placement_new<value_type>(std::addressof(storage));
-            destructor_guard guard{*object};
-
-            if (auto result = serialize_one(*object); failure(result))
+            if(!expected.has_value()) [[unlikely]] {
+                if constexpr (std::is_default_constructible_v<value_type>) {
+                    expected.emplace();
+                } else {
+                    alignas(value_type) std::byte storage[sizeof(value_type)];
+                    auto object =
+                        access::placement_new<value_type>(std::addressof(storage));
+                    destructor_guard guard{*object};
+                    expected = std::move(*object);
+                }
+            }
+            if (auto result = serialize_one(*expected); failure(result))
                 [[unlikely]] {
                 return result;
             }
-
-            expected = std::move(*object);
         }
-
         return {};
     }
 
