@@ -27,14 +27,6 @@ strategy:
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
       TEST_AUTODETECT: 1
       CXX_STANDARD: 23
-    macOS-15-clang-13:
-      VM_IMAGE: 'macOS-15'
-      OPERATING_SYSTEM: 'mac-os'
-      COMPILER: 'clang'
-      CLANG_VERSION: '13'
-      ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
-      TEST_AUTODETECT: 1
-      CXX_STANDARD: 20
 
 pool:
   vmImage: $(VM_IMAGE)
