@@ -3052,7 +3052,7 @@ private:
         if constexpr (std::is_void_v<value_type>) {
             expected.emplace();
         } else {
-            if(!expected.has_value()) [[unlikely]] {
+            if (!expected.has_value()) [[unlikely]] {
                 if constexpr (std::is_default_constructible_v<value_type>) {
                     expected.emplace();
                 } else {
