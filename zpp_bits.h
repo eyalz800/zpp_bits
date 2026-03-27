@@ -1493,6 +1493,9 @@ struct optional_ptr : std::unique_ptr<Type>
 template <typename Type, typename...>
 optional_ptr(Type *) -> optional_ptr<Type>;
 
+template <typename Type, typename...>
+optional_ptr(std::unique_ptr<Type>) -> optional_ptr<Type>;
+
 template <typename Archive, typename Type>
 ZPP_BITS_INLINE constexpr static auto serialize(
     Archive & archive,

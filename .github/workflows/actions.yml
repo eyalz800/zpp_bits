@@ -24,6 +24,7 @@ jobs:
             vm_image: ubuntu-22.04
             test_autodetect_members: 0
             with_zpp_throwing: 0
+            cxx_standard: 20
           - name: GCC 12 Ubuntu
             compiler: gcc
             compiler_version: 12
@@ -33,6 +34,7 @@ jobs:
             vm_image: ubuntu-22.04
             test_autodetect_members: 0
             with_zpp_throwing: 0
+            cxx_standard: 20
           - name: Clang 13 Ubuntu
             compiler: clang
             compiler_version: 13
@@ -42,6 +44,7 @@ jobs:
             vm_image: ubuntu-22.04
             test_autodetect_members: 1
             with_zpp_throwing: 1
+            cxx_standard: 20
           - name: Clang 20 Ubuntu
             compiler: clang
             compiler_version: 20
@@ -51,6 +54,7 @@ jobs:
             vm_image: ubuntu-24.04
             test_autodetect_members: 0
             with_zpp_throwing: 1
+            cxx_standard: 23
           - name: Clang 17 MacOS
             compiler: clang
             compiler_version: 17
@@ -60,6 +64,7 @@ jobs:
             vm_image: macos-15
             test_autodetect_members: 0
             with_zpp_throwing: 1
+            cxx_standard: 20
           - name: Clang 18 MacOS
             compiler: clang
             compiler_version: 18
@@ -69,6 +74,28 @@ jobs:
             vm_image: macos-15
             test_autodetect_members: 0
             with_zpp_throwing: 1
+            cxx_standard: 20
+          - name: Clang 22 Ubuntu
+            compiler: clang
+            compiler_version: 22
+            make: make
+            mode: release
+            os: ubuntu
+            vm_image: ubuntu-24.04
+            test_autodetect_members: 0
+            with_zpp_throwing: 1
+            cxx_standard: 26
+          - name: GCC 15 Ubuntu
+            compiler: gcc
+            compiler_version: 15
+            make: make
+            mode: release
+            os: ubuntu
+            vm_image: ubuntu-24.04
+            test_autodetect_members: 0
+            with_zpp_throwing: 0
+            cxx_standard: 26
+            extra_flags: -Wno-error=array-bounds # GCC issue warning about array bounds
     env:
       DEBIAN_FRONTEND: noninteractive
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
@@ -107,7 +134,7 @@ jobs:
           sed -i 's/ZPP_CXX .*/ZPP_CXX := g++-${{ matrix.config.compiler_version }}/g' ./test/zpp_project.mk
       - name: 'compile'
         run: |
-          ${{ matrix.config.make }} -C test -f zpp.mk -j mode=${{ matrix.config.mode }} ZPP_BITS_AUTODETECT_MEMBERS_MODE=${{ matrix.config.test_autodetect_members }}
+          ${{ matrix.config.make }} -C test -f zpp.mk -j mode=${{ matrix.config.mode }} ZPP_BITS_AUTODETECT_MEMBERS_MODE=${{ matrix.config.test_autodetect_members }} ZPP_CXX_STANDARD=${{ matrix.config.cxx_standard }} ZPP_EXTRA_FLAGS=${{ matrix.config.extra_flags }}
       - name: 'test'
         run: |
           ./test/out/${{ matrix.config.mode }}/default/output
