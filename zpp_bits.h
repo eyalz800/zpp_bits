@@ -1247,6 +1247,10 @@ constexpr auto access::number_of_members()
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc++26-extensions"
 #endif
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
     } else if constexpr (!concepts::inspection_guarded<type>) {
         return decltype([](Type && item) {
             auto && [...members] = item;
@@ -1254,6 +1258,9 @@ constexpr auto access::number_of_members()
         } (std::declval<Type>()))::value;
 #if (__cplusplus < 202600L) && (defined __clang__)
 #pragma clang diagnostic pop
+#endif
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
 #endif
 #elif ZPP_BITS_AUTODETECT_MEMBERS_MODE == 0
     } else if constexpr (std::is_aggregate_v<type>) {
