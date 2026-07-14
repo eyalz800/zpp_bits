@@ -96,6 +96,17 @@ jobs:
             with_zpp_throwing: 0
             cxx_standard: 26
             extra_flags: -Wno-error=array-bounds # GCC issue warning about array bounds
+          - name: GCC 16 Ubuntu
+            compiler: gcc
+            compiler_version: 16
+            make: make
+            mode: release
+            os: ubuntu
+            vm_image: ubuntu-24.04
+            test_autodetect_members: 0
+            with_zpp_throwing: 0
+            cxx_standard: 26
+            extra_flags: -Wno-error=array-bounds
     env:
       DEBIAN_FRONTEND: noninteractive
       ASAN_OPTIONS: 'alloc_dealloc_mismatch=0'
