@@ -950,7 +950,8 @@ concept array =
 template <typename Type>
 concept inspection_guarded =
     (container<Type> && !array<Type>) || owning_pointer<Type> ||
-    variant<Type> || optional<Type> || bitset<Type>;
+    variant<Type> || optional<Type> || bitset<Type> ||
+    has_explicit_serialize<Type>;
 
 } // namespace concepts
 
