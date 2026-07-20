@@ -2178,6 +2178,7 @@ protected:
 #if !defined __clang__ && defined __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
 #endif
                 std::memcpy(m_data.data() + m_position,
                             item.data(),
