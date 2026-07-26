@@ -590,8 +590,6 @@ namespace v1
 {
 struct person
 {
-    using serialize = zpp::bits::members<2>;
-
     auto get_hobby() const
     {
         return "<none>"sv;
@@ -606,8 +604,6 @@ namespace v2
 {
 struct person
 {
-    using serialize = zpp::bits::members<3>;
-
     auto get_hobby() const
     {
         return std::string_view(hobby);
