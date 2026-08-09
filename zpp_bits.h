@@ -2928,6 +2928,15 @@ private:
                 [[unlikely]] {
                 return result;
             }
+
+            if constexpr (allocation_limit !=
+                          std::numeric_limits<std::size_t>::max()) {
+                constexpr auto limit =
+                    allocation_limit / sizeof(typename type::value_type);
+                if (size > limit) [[unlikely]] {
+                    return std::errc::message_size;
+                }
+            }
         } else {
             size = container.size();
         }
@@ -3144,7 +3153,7 @@ private:
         using type = std::remove_cvref_t<decltype(variant)>;
 
         auto index = traits::variant<type>::index(id);
-        if (index > sizeof...(Types)) [[unlikely]] {
+        if (index >= sizeof...(Types)) [[unlikely]] {
             return std::errc::bad_message;
         }
 
@@ -5245,17 +5254,17 @@ struct pb
                     return result;
                 }
 
+                if constexpr (archive_type::allocation_limit !=
+                              std::numeric_limits<std::size_t>::max()) {
+                    if (length > archive_type::allocation_limit)
+                        [[unlikely]] {
+                        return errc{std::errc::message_size};
+                    }
+                }
+
                 if constexpr (requires { item.resize(1); } &&
                               (std::is_fundamental_v<value_type> ||
                                std::same_as<value_type, std::byte>)) {
-                    if constexpr (archive_type::allocation_limit !=
-                                  std::numeric_limits<
-                                      std::size_t>::max()) {
-                        if (length > archive_type::allocation_limit)
-                            [[unlikely]] {
-                            return errc{std::errc::message_size};
-                        }
-                    }
                     item.resize(length / sizeof(value_type));
                     return archive(unsized(item));
                 } else {
