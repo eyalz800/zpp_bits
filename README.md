@@ -1023,6 +1023,12 @@ auto [in, out] = in_out(data, zpp::bits::alloc_limit<0x10000>{});
 auto [data, in, out] = data_in_out(zpp::bits::alloc_limit<0x10000>{});
 ```
 
+On input the limit applies to every element count read from the archive,
+which covers resizable containers such as `std::vector` and `std::string`,
+associative containers such as `std::map` and `std::unordered_set`, and
+length delimited protobuf fields. The limit is evaluated per container
+rather than as a budget for the whole message.
+
 For best correctness, when using growing buffer for output, if the buffer was grown, the buffer is resized
 in the end for the exact position of the output archive, this incurs an extra resize
 which in most cases is acceptable, but you may avoid this additional resize and recognize
