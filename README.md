@@ -177,7 +177,8 @@ operator from return value based, or by examining the internal error code of `st
 which one you used:
 1. `std::errc::result_out_of_range` - attempting to write or read from a too short buffer.
 2. `std::errc::no_buffer_space` - growing buffer would grow beyond the allocation limits or overflow.
-3. `std::errc::value_too_large` - varint (variable length integer) encoding is beyond the representation limits.
+3. `std::errc::value_too_large` - varint (variable length integer) encoding is beyond the representation limits,
+or nesting is beyond the user defined nesting limit.
 4. `std::errc::message_size` - message size is beyond the user defined allocation limits.
 5. `std::errc::not_supported` - attempt to call an RPC that is not listed as supported.
 6. `std::errc::bad_message` - attempt to read a variant of unrecognized type.
@@ -1028,6 +1029,22 @@ which covers resizable containers such as `std::vector` and `std::string`,
 associative containers such as `std::map` and `std::unordered_set`, and
 length delimited protobuf fields. The limit is evaluated per container
 rather than as a budget for the whole message.
+
+A self referencing type nests as deeply as the message says it does, and each
+level costs a stack frame, so a message can ask for more nesting than the
+stack has room for. How deeply such a type may nest can be limited using
+`zpp::bits::nesting_limit<N>{}`, which fails with
+`std::errc::value_too_large` past `N` levels:
+```cpp
+zpp::bits::in in(data, zpp::bits::nesting_limit<128>{});
+auto [in, out] = in_out(data, zpp::bits::nesting_limit<128>{});
+```
+
+The limit counts self referencing types and nested protobuf messages. Types
+that cannot nest without bound, such as plainly nested containers, are not
+counted and are never rejected by it. Archives that are not given the option
+carry no nesting state and emit no checks, so nesting is unlimited by default
+and there is nothing to pay for not using it.
 
 For best correctness, when using growing buffer for output, if the buffer was grown, the buffer is resized
 in the end for the exact position of the output archive, this incurs an extra resize

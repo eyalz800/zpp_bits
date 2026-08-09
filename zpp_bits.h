@@ -709,6 +709,41 @@ constexpr auto alloc_limit()
 }
 
 template <typename Option, typename... Options>
+constexpr auto get_nesting_limit()
+{
+    if constexpr (requires {
+                      std::remove_cvref_t<Option>::nesting_limit_value;
+                  }) {
+        return std::remove_cvref_t<Option>::nesting_limit_value;
+    } else if constexpr (sizeof...(Options) != 0) {
+        return get_nesting_limit<Options...>();
+    } else {
+        return std::numeric_limits<std::size_t>::max();
+    }
+}
+
+template <typename... Options>
+constexpr auto nesting_limit()
+{
+    if constexpr (sizeof...(Options) != 0) {
+        return get_nesting_limit<Options...>();
+    } else {
+        return std::numeric_limits<std::size_t>::max();
+    }
+}
+
+// Occupies no space in an archive that was not given a nesting limit.
+struct no_nesting_depth
+{
+};
+
+template <std::size_t Limit>
+using nesting_depth_t =
+    std::conditional_t<Limit != std::numeric_limits<std::size_t>::max(),
+                       std::size_t,
+                       no_nesting_depth>;
+
+template <typename Option, typename... Options>
 constexpr auto get_enlarger()
 {
     if constexpr (requires {
@@ -1113,6 +1148,17 @@ template <std::size_t Size>
 struct alloc_limit : option<alloc_limit<Size>>
 {
     constexpr static auto alloc_limit_value = Size;
+};
+
+// Limits how deeply a self referencing type may nest. Deserializing a self
+// referencing type recurses once per level of nesting, so a message that
+// nests far deeper than the data it describes is worth rejecting before the
+// stack runs out. Opt in only - archives that are not given this option
+// carry no nesting state and emit no checks.
+template <std::size_t Size>
+struct nesting_limit : option<nesting_limit<Size>>
+{
+    constexpr static auto nesting_limit_value = Size;
 };
 
 template <std::size_t Multiplier, std::size_t Divisor = 1>
@@ -1906,6 +1952,47 @@ struct size_varint : option<size_varint>
 };
 } // namespace options
 
+// Counts one level of nesting for the lifetime of the guard. Compiles away
+// entirely for archives that were not given a nesting limit.
+template <typename Archive>
+struct nesting_guard
+{
+    ZPP_BITS_INLINE constexpr explicit nesting_guard(Archive & archive) :
+        m_archive(archive)
+    {
+        if constexpr (Archive::nesting_limited) {
+            if (archive.nesting_depth() >= Archive::nesting_depth_limit)
+                [[unlikely]] {
+                result = errc{std::errc::value_too_large};
+                return;
+            }
+            ++archive.nesting_depth();
+            m_entered = true;
+        }
+    }
+
+    nesting_guard(const nesting_guard &) = delete;
+    nesting_guard & operator=(const nesting_guard &) = delete;
+
+    ZPP_BITS_INLINE constexpr ~nesting_guard()
+    {
+        if constexpr (Archive::nesting_limited) {
+            if (m_entered) {
+                --m_archive.nesting_depth();
+            }
+        }
+    }
+
+    errc result{};
+
+private:
+    Archive & m_archive;
+    bool m_entered{};
+};
+
+template <typename Archive>
+nesting_guard(Archive &) -> nesting_guard<Archive>;
+
 template <concepts::byte_view ByteView, typename... Options>
 class basic_out
 {
@@ -1942,6 +2029,12 @@ public:
     using default_size_type = traits::default_size_type_t<Options...>;
 
     constexpr static auto allocation_limit = traits::alloc_limit<Options...>();
+
+    constexpr static auto nesting_depth_limit =
+        traits::nesting_limit<Options...>();
+
+    constexpr static auto nesting_limited =
+        nesting_depth_limit != std::numeric_limits<std::size_t>::max();
 
     constexpr static auto enlarger = traits::enlarger<Options...>();
 
@@ -2000,6 +2093,11 @@ public:
     constexpr auto processed_data()
     {
         return std::span<byte_type>{m_data.data(), m_position};
+    }
+
+    constexpr auto & nesting_depth()
+    {
+        return m_nesting;
     }
 
     constexpr void reset(std::size_t position = 0)
@@ -2195,11 +2293,21 @@ protected:
                                                           type>) {
             return serialize_one(as_bytes(item));
         } else if constexpr (concepts::self_referencing<type>) {
-            return visit_members(
+            if constexpr (nesting_limited) {
+                if (m_nesting >= nesting_depth_limit) [[unlikely]] {
+                    return errc{std::errc::value_too_large};
+                }
+                ++m_nesting;
+            }
+            auto result = visit_members(
                 item,
                 [&](auto &&... items) constexpr {
                     return serialize_many(items...);
                 });
+            if constexpr (nesting_limited) {
+                --m_nesting;
+            }
+            return result;
         } else {
             return visit_members(
                 item,
@@ -2409,6 +2517,13 @@ protected:
     ZPP_BITS_INLINE constexpr errc serialize_one(concepts::by_protocol auto && item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
+
+        // One more message inside a message is one more level of nesting.
+        nesting_guard guard{*this};
+        if (failure(guard.result)) [[unlikely]] {
+            return guard.result;
+        }
+
         if constexpr (!std::is_void_v<SizeType>) {
             auto size_position = m_position;
             if (auto result = serialize_one(SizeType{});
@@ -2486,6 +2601,8 @@ protected:
 
     view_type m_data{};
     std::size_t m_position{};
+    [[no_unique_address]] traits::nesting_depth_t<nesting_depth_limit>
+        m_nesting{};
 };
 
 template <concepts::byte_view ByteView = std::vector<std::byte>, typename... Options>
@@ -2585,6 +2702,12 @@ public:
     constexpr static auto allocation_limit =
         traits::alloc_limit<Options...>();
 
+    constexpr static auto nesting_depth_limit =
+        traits::nesting_limit<Options...>();
+
+    constexpr static auto nesting_limited =
+        nesting_depth_limit != std::numeric_limits<std::size_t>::max();
+
     constexpr explicit in(ByteView && view, Options && ... options) : m_data(view)
     {
         static_assert(!resizable);
@@ -2630,6 +2753,11 @@ public:
     constexpr void reset(std::size_t position = 0)
     {
         m_position = position;
+    }
+
+    constexpr auto & nesting_depth()
+    {
+        return m_nesting;
     }
 
     constexpr static auto kind()
@@ -2756,11 +2884,21 @@ private:
                                                           type>) {
             return serialize_one(as_bytes(item));
         } else if constexpr (concepts::self_referencing<type>) {
-            return visit_members(
+            if constexpr (nesting_limited) {
+                if (m_nesting >= nesting_depth_limit) [[unlikely]] {
+                    return errc{std::errc::value_too_large};
+                }
+                ++m_nesting;
+            }
+            auto result = visit_members(
                 item,
                 [&](auto &&... items) constexpr {
                     return serialize_many(items...);
                 });
+            if constexpr (nesting_limited) {
+                --m_nesting;
+            }
+            return result;
         } else {
             return visit_members(
                 item,
@@ -3231,6 +3369,13 @@ private:
     ZPP_BITS_INLINE constexpr errc serialize_one(concepts::by_protocol auto && item)
     {
         using type = std::remove_cvref_t<decltype(item)>;
+
+        // One more message inside a message is one more level of nesting.
+        nesting_guard guard{*this};
+        if (failure(guard.result)) [[unlikely]] {
+            return guard.result;
+        }
+
         if constexpr (!std::is_void_v<SizeType>) {
             SizeType size{};
             if (auto result = serialize_one(size); failure(result))
@@ -3258,6 +3403,8 @@ private:
 
     view_type m_data{};
     std::size_t m_position{};
+    [[no_unique_address]] traits::nesting_depth_t<nesting_depth_limit>
+        m_nesting{};
 };
 
 template <typename Type, std::size_t Size, typename... Options>
@@ -4845,8 +4992,14 @@ struct pb
                     std::conditional_t<archive_type::no_enlarge_overflow,
                                        no_enlarge_overflow,
                                        enlarge_overflow>{},
-                    alloc_limit<archive_type::allocation_limit>{}};
+                    alloc_limit<archive_type::allocation_limit>{},
+                    nesting_limit<archive_type::nesting_depth_limit>{}};
             out.position() = archive.position();
+            if constexpr (archive_type::nesting_limited) {
+                // The depth reached so far has to travel with the nested
+                // archive; the level itself is counted by the caller.
+                out.nesting_depth() = archive.nesting_depth();
+            }
             if constexpr (concepts::self_referencing<type>) {
                 auto result = visit_members(
                     item,
@@ -5068,12 +5221,22 @@ struct pb
         requires(std::remove_cvref_t<decltype(archive)>::kind() ==
                  kind::in)
     {
+        using archive_type = std::remove_cvref_t<decltype(archive)>;
+
         auto data = archive.remaining_data();
         in in{std::span{data.data(), std::min(size, data.size())},
               size_varint{},
               endian::little{},
-              alloc_limit<std::remove_cvref_t<
-                  decltype(archive)>::allocation_limit>{}};
+              alloc_limit<archive_type::allocation_limit>{},
+              nesting_limit<archive_type::nesting_depth_limit>{}};
+
+        // Each nested message is read through a fresh archive, so the depth
+        // reached so far has to travel with it; the level itself is counted
+        // by the caller.
+        if constexpr (archive_type::nesting_limited) {
+            in.nesting_depth() = archive.nesting_depth();
+        }
+
         auto result = deserialize_fields(in, item);
         archive.position() += in.position();
         return result;
