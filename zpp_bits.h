@@ -5280,6 +5280,47 @@ struct pb
         return {};
     }
 
+    ZPP_BITS_INLINE constexpr static errc skip_bytes(auto & archive,
+                                                     std::size_t count)
+    {
+        if (count > archive.remaining_data().size()) [[unlikely]] {
+            return errc{std::errc::result_out_of_range};
+        }
+
+        archive.position() += count;
+        return errc{};
+    }
+
+    // Advances past a field the message has no member for, so that the
+    // fields following it are still read at the right offset. Without this
+    // the reader would carry on from the middle of the field and parse the
+    // remainder of the message against the wrong offsets.
+    ZPP_BITS_INLINE constexpr static errc skip_field(auto & archive,
+                                                     wire_type field_type)
+    {
+        switch (field_type) {
+        case wire_type::varint: {
+            vsize_t discarded;
+            return archive(discarded);
+        }
+        case wire_type::fixed_64:
+            return skip_bytes(archive, sizeof(std::uint64_t));
+        case wire_type::fixed_32:
+            return skip_bytes(archive, sizeof(std::uint32_t));
+        case wire_type::length_delimited: {
+            vsize_t length;
+            if (auto result = archive(length); failure(result))
+                [[unlikely]] {
+                return result;
+            }
+            return skip_bytes(archive, length);
+        }
+        default:
+            // Groups are deprecated and are not supported.
+            return errc{std::errc::protocol_error};
+        }
+    }
+
     template <std::size_t Index = 0>
     ZPP_BITS_INLINE constexpr static auto
     deserialize_field(auto & archive,
@@ -5292,7 +5333,7 @@ struct pb
             if (!field_num) [[unlikely]] {
                 return errc{std::errc::protocol_error};
             }
-            return errc{};
+            return skip_field(archive, field_type);
         } else if (field_number_from_struct<type, Index>() != field_num) {
             return deserialize_field<Index + 1>(
                 archive, item, field_num, field_type);
@@ -5341,6 +5382,10 @@ struct pb
                 archive,
                 field_type,
                 static_cast<typename type::pb_field_type &>(item));
+        } else if constexpr (concepts::empty<type>) {
+            // A reserved field number. There is nothing to read into, but
+            // the field still occupies the input and has to be skipped.
+            return skip_field(archive, field_type);
         } else if constexpr (!concepts::container<type>) {
             return archive(item);
         } else if constexpr (concepts::associative_container<type> &&
