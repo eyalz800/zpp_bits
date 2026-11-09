@@ -65,4 +65,26 @@ TEST(test_constexpr, unsized_string_view)
                           std::string_view{"Hello World"}.size())));
 }
 
+struct empty
+{
+};
+
+constexpr auto empties()
+{
+    std::array<std::byte, 0x1000> data{};
+    auto [in, out] = zpp::bits::in_out(data);
+    out(std::array<empty, 3>{}, 0x1337).or_throw();
+
+    std::array<empty, 3> e;
+    int i = 0;
+    in(e, i).or_throw();
+    return std::tuple{out.position(), in.position(), i};
+}
+
+TEST(test_constexpr, empties)
+{
+    static_assert(empties() == std::tuple{4, 4, 0x1337});
+    EXPECT_TRUE((empties() == std::tuple{4, 4, 0x1337}));
+}
+
 } // namespace test_constexpr

@@ -424,4 +424,84 @@ TEST(byte_serializable, members_requires_padding_outside_auto)
 
 #endif // ZPP_BITS_AUTODETECT_MEMBERS_MODE > 0
 
+struct empty
+{
+};
+
+struct members_empty
+{
+    using serialize = zpp::bits::members<0>;
+};
+
+static_assert(!zpp::bits::concepts::byte_serializable<empty>);
+static_assert(!zpp::bits::concepts::byte_serializable<members_empty>);
+static_assert(!zpp::bits::concepts::byte_serializable<std::monostate>);
+static_assert(!zpp::bits::concepts::byte_serializable<empty[5]>);
+static_assert(!zpp::bits::concepts::byte_serializable<std::array<empty, 5>>);
+
+TEST(byte_serializable, vector_empty)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(std::vector<empty>(5)).or_throw();
+
+    EXPECT_EQ(encode_hex(data), "05000000");
+
+    std::vector<empty> v;
+    in(v).or_throw();
+    EXPECT_EQ(in.position(), std::size_t{4});
+    EXPECT_EQ(v.size(), std::size_t{5});
+}
+
+TEST(byte_serializable, vector_members_empty)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(std::vector<members_empty>(5)).or_throw();
+
+    EXPECT_EQ(encode_hex(data), "05000000");
+
+    std::vector<members_empty> v;
+    in(v).or_throw();
+    EXPECT_EQ(in.position(), std::size_t{4});
+    EXPECT_EQ(v.size(), std::size_t{5});
+}
+
+TEST(byte_serializable, vector_monostate)
+{
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(std::vector<std::monostate>(5)).or_throw();
+
+    EXPECT_EQ(encode_hex(data), "05000000");
+
+    std::vector<std::monostate> v;
+    in(v).or_throw();
+    EXPECT_EQ(in.position(), std::size_t{4});
+    EXPECT_EQ(v.size(), std::size_t{5});
+}
+
+struct stdarray_empty
+{
+    std::byte b{};
+    std::array<empty, 3> e{};
+};
+
+#if !ZPP_BITS_AUTODETECT_MEMBERS_MODE
+auto serialize(const stdarray_empty &) -> zpp::bits::members<2>;
+#endif
+
+TEST(byte_serializable, stdarray_empty)
+{
+    static_assert(!zpp::bits::concepts::byte_serializable<stdarray_empty>);
+    static_assert(sizeof(stdarray_empty) == 4);
+
+    auto [data, in, out] = zpp::bits::data_in_out();
+    out(stdarray_empty{std::byte{0x25}}).or_throw();
+
+    EXPECT_EQ(encode_hex(data), "25");
+
+    stdarray_empty s;
+    in(s).or_throw();
+    EXPECT_EQ(in.position(), std::size_t{1});
+    EXPECT_EQ(s.b, std::byte{0x25});
+}
+
 } // namespace test_byte_serializable
