@@ -1370,6 +1370,8 @@ constexpr auto access::byte_serializable()
 
     if constexpr (members_count < 0) {
         return false;
+    } else if constexpr (concepts::empty<type>) {
+        return false;
     } else if constexpr (!std::is_trivially_copyable_v<type>) {
         return false;
     } else if constexpr (has_explicit_serialize<type,
